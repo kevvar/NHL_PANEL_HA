@@ -1187,17 +1187,19 @@
         // POWER PLAY va al equipo CONTRARIO (el que tiene ventaja)
         const powerPlayTeam = isPenaltyOnHome ? 'away' : 'home';
         
-        // Determinar en qué lado mostrar la tarjeta
+        // Determinar en qué lado mostrar la tarjeta del power play
+        // La tarjeta siempre va del lado del equipo que TIENE el power play
         let showOnRight = false;
         
         if (homeDefending === 'left') {
-          // HOME está en RIGHT, AWAY en LEFT
-          showOnRight = powerPlayTeam === 'home'; // Si power play es HOME, mostrar derecha
+          // HOME defiende izquierda → HOME está en DERECHA del panel, AWAY en IZQUIERDA
+          showOnRight = (powerPlayTeam === 'home'); // Si HOME tiene PP → derecha
         } else if (homeDefending === 'right') {
-          // HOME está en LEFT, AWAY en RIGHT
-          showOnRight = powerPlayTeam === 'away'; // Si power play es AWAY, mostrar derecha
+          // HOME defiende derecha → HOME está en IZQUIERDA del panel, AWAY en DERECHA  
+          showOnRight = (powerPlayTeam === 'away'); // Si AWAY tiene PP → derecha
         } else {
-          showOnRight = powerPlayTeam === (isHome ? 'home' : 'away');
+          // Fallback: sin homeDefending conocido, asumir disposición estándar
+          showOnRight = (powerPlayTeam === 'home');
         }
         
         processedPenalties.add(eventId);
@@ -1213,7 +1215,7 @@
       // Esto evita eliminar las tarjetas que acabamos de crear
       if (newPenaltiesDetected === 0) {
         // Revisar situationCode para terminar power plays activos
-        checkPowerPlayStatus(playByPlayData);
+        checkPowerPlayStatus(playByPlayData, isHome);
       } else {
         addLog(`⏸️ Saltando checkPowerPlayStatus (${newPenaltiesDetected} penalty(s) recién detectado(s))`, 'info');
       }
@@ -1227,7 +1229,7 @@
      * Revisa el situationCode actual y elimina power plays cuando vuelve a 1551
      * MEJORADO: Ahora recrea tarjetas si detecta power play activo pero no hay tarjetas
      */
-    function checkPowerPlayStatus(playByPlayData) {
+    function checkPowerPlayStatus(playByPlayData, isHome) {
       if (!playByPlayData?.plays || playByPlayData.plays.length === 0) return;
       
       // Obtener el último play para revisar situationCode
@@ -1248,14 +1250,14 @@
           addLog(`⚡ Power Play activo: HOME ${homePlayers}v${awayPlayers}`, 'info');
           
           // NUEVO: Verificar si existe tarjeta, si no, crearla
-          ensurePowerPlayCard('home', homeDefending, homePlayers, awayPlayers);
+          ensurePowerPlayCard('home', homeDefending, homePlayers, awayPlayers, isHome);
           
         } else if (awayPlayers > homePlayers) {
           // Away tiene ventaja
           addLog(`⚡ Power Play activo: AWAY ${awayPlayers}v${homePlayers}`, 'info');
           
           // NUEVO: Verificar si existe tarjeta, si no, crearla
-          ensurePowerPlayCard('away', homeDefending, awayPlayers, homePlayers);
+          ensurePowerPlayCard('away', homeDefending, awayPlayers, homePlayers, isHome);
           
         } else if (currentSituation === "1551") {
           // Juego parejo (5v5), eliminar todas las tarjetas
@@ -1274,7 +1276,7 @@
      * Asegura que exista una tarjeta de power play para el equipo con ventaja
      * Si no existe, la crea automáticamente
      */
-    function ensurePowerPlayCard(powerPlayTeam, homeDefending, advantagePlayers, disadvantagePlayers) {
+    function ensurePowerPlayCard(powerPlayTeam, homeDefending, advantagePlayers, disadvantagePlayers, isHome) {
       // Verificar si ya hay tarjetas activas
       const existingCards = document.querySelectorAll('.penalty-card');
       
@@ -1286,18 +1288,19 @@
       // No hay tarjetas pero SÍ hay power play activo -> RECREAR
       addLog(`🔄 Recreando tarjeta de Power Play perdida para ${powerPlayTeam.toUpperCase()}`, 'warning');
       
-      // Determinar en qué lado mostrar la tarjeta
+      // Determinar en qué lado mostrar la tarjeta del power play
+      // La tarjeta siempre va del lado del equipo que TIENE el power play
       let showOnRight = false;
       
       if (homeDefending === 'left') {
-        // HOME está en RIGHT, AWAY en LEFT
-        showOnRight = powerPlayTeam === 'home';
+        // HOME defiende izquierda → HOME está en DERECHA del panel, AWAY en IZQUIERDA
+        showOnRight = (powerPlayTeam === 'home'); // Si HOME tiene PP → derecha
       } else if (homeDefending === 'right') {
-        // HOME está en LEFT, AWAY en RIGHT
-        showOnRight = powerPlayTeam === 'away';
+        // HOME defiende derecha → HOME está en IZQUIERDA del panel, AWAY en DERECHA
+        showOnRight = (powerPlayTeam === 'away'); // Si AWAY tiene PP → derecha
       } else {
-        // Fallback: si no sabemos homeDefending, usar lógica por defecto
-        showOnRight = powerPlayTeam === 'home';
+        // Fallback: sin homeDefending conocido, asumir disposición estándar
+        showOnRight = (powerPlayTeam === 'home');
       }
       
       // Crear un eventId temporal basado en timestamp
