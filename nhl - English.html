@@ -924,7 +924,7 @@
     
     async function findGameId(teamName) {
       try {
-        addLog(`Buscando game ID para: ${teamName}`, 'info');
+        addLog(`Looking for game ID: ${teamName}`, 'info');
         
         const url = `https://api-web.nhle.com/v1/schedule/now`;
         const data = await callNHLApiViaHA(url);
@@ -1009,7 +1009,7 @@
         addLog(`💡 Tip: Try using the team abbreviation (e.g.: VGK, WPG, TOR)`, 'info');
         return null;
       } catch (error) {
-        addLog(`Error buscando game ID: ${error.message}`, 'error');
+        addLog(`Error searching game ID: ${error.message}`, 'error');
         console.error('Error finding game ID:', error);
         return null;
       }
@@ -1020,10 +1020,10 @@
         const url = `https://api-web.nhle.com/v1/gamecenter/${gameId}/play-by-play`;
         const data = await callNHLApiViaHA(url);
         
-        addLog(`✔ Play-by-play obtenido (${data.plays?.length || 0} eventos)`, 'success');
+        addLog(`✔ Play-by-play got it (${data.plays?.length || 0} events)`, 'success');
         return data;
       } catch (error) {
-        addLog(`Error en fetchPlayByPlay: ${error.message}`, 'error');
+        addLog(`Error fetchPlayByPlay: ${error.message}`, 'error');
         console.error('Error fetching play-by-play:', error);
         return null;
       }
@@ -1187,25 +1187,19 @@
         // POWER PLAY goes to the OPPOSITE team (the one with advantage)
         const powerPlayTeam = isPenaltyOnHome ? 'away' : 'home';
         
-        // Determine which side to show the power play card
-        // The card always goes on the side of the team that HAS the power play
-        let showOnRight = false;
-        
-        if (homeDefending === 'left') {
-          // HOME defends left → HOME is on RIGHT of panel, AWAY on LEFT
-          showOnRight = (powerPlayTeam === 'home'); // If HOME has PP → right
-        } else if (homeDefending === 'right') {
-          // HOME defends right → HOME is on LEFT of panel, AWAY on RIGHT  
-          showOnRight = (powerPlayTeam === 'away'); // If AWAY has PP → right
-        } else {
-          // Fallback: without known homeDefending, assume standard layout
-          showOnRight = (powerPlayTeam === 'home');
-        }
+        // SIMPLIFIED LOGIC: The team we're following is ALWAYS on the LEFT
+        // If following HOME (isHome=true) and HOME has PP → LEFT (showOnRight=false)
+        // If following HOME (isHome=true) and AWAY has PP → RIGHT (showOnRight=true)
+        // If following AWAY (isHome=false) and AWAY has PP → LEFT (showOnRight=false)
+        // If following AWAY (isHome=false) and HOME has PP → RIGHT (showOnRight=true)
+        const showOnRight = (isHome && powerPlayTeam === 'away') || (!isHome && powerPlayTeam === 'home');
         
         processedPenalties.add(eventId);
         newPenaltiesDetected++;
         
-        addLog(`⚡ New POWER PLAY: ${duration} min - Team: ${powerPlayTeam.toUpperCase()} - Show: ${showOnRight ? 'RIGHT' : 'LEFT'} (Event ${eventId})`, 'warning');
+        const ourTeam = isHome ? 'HOME' : 'AWAY';
+        const hasAdvantage = (isHome && powerPlayTeam === 'home') || (!isHome && powerPlayTeam === 'away');
+        addLog(`⚡ New POWER PLAY: ${powerPlayTeam.toUpperCase()} - ${hasAdvantage ? 'OURS' : 'OPPONENT'} (${showOnRight ? 'RIGHT' : 'LEFT'}) - Event ${eventId}`, 'warning');
         
         // Create POWER PLAY card (no countdown)
         createPowerPlayCard(eventId, showOnRight, homeDefending);
@@ -1286,22 +1280,12 @@
       }
       
       // No cards but there IS an active power play -> RECREATE
-      addLog(`🔄 Recreating lost Power Play card for ${powerPlayTeam.toUpperCase()}`, 'warning');
+      const ourTeam = isHome ? 'HOME' : 'AWAY';
+      const hasAdvantage = (isHome && powerPlayTeam === 'home') || (!isHome && powerPlayTeam === 'away');
+      addLog(`🔄 Recreating Power Play card for ${powerPlayTeam.toUpperCase()} - ${hasAdvantage ? 'OURS' : 'OPPONENT'}`, 'warning');
       
-      // Determine which side to show the power play card
-      // The card always goes on the side of the team that HAS the power play
-      let showOnRight = false;
-      
-      if (homeDefending === 'left') {
-        // HOME defends left → HOME is on RIGHT of panel, AWAY on LEFT
-        showOnRight = (powerPlayTeam === 'home'); // If HOME has PP → right
-      } else if (homeDefending === 'right') {
-        // HOME defends right → HOME is on LEFT of panel, AWAY on RIGHT
-        showOnRight = (powerPlayTeam === 'away'); // If AWAY has PP → right
-      } else {
-        // Fallback: without known homeDefending, assume standard layout
-        showOnRight = (powerPlayTeam === 'home');
-      }
+      // SIMPLIFIED LOGIC: The team we're following is ALWAYS on the LEFT
+      const showOnRight = (isHome && powerPlayTeam === 'away') || (!isHome && powerPlayTeam === 'home');
       
       // Create a temporary eventId based on timestamp
       const tempEventId = `temp_pp_${Date.now()}`;
@@ -1309,7 +1293,7 @@
       // Create the card
       createPowerPlayCard(tempEventId, showOnRight, homeDefending);
       
-      addLog(`✅ Power Play card recreated: ${powerPlayTeam.toUpperCase()} ${advantagePlayers}v${disadvantagePlayers} - Side: ${showOnRight ? 'RIGHT' : 'LEFT'}`, 'success');
+      addLog(`✅ Card recreated: ${hasAdvantage ? 'OURS' : 'OPPONENT'} ${advantagePlayers}v${disadvantagePlayers} - ${showOnRight ? 'RIGHT' : 'LEFT'}`, 'success');
     }
     
     /**
@@ -1925,7 +1909,7 @@
       if (desired !== refreshIntervalMs) {
         setRefreshInterval(desired);
         const intervalText = desired === 15000 ? '15s' : desired === 120000 ? '2min' : '5min';
-        addLog(`⏱️ Intervalo ajustado: ${intervalText} (Estado: ${gameState})`, 'info');
+        addLog(`⏱️ Adjusted interval: ${intervalText} (Estado: ${gameState})`, 'info');
       }
       
       if (live) {
