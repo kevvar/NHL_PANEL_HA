@@ -1187,25 +1187,19 @@
         // POWER PLAY va al equipo CONTRARIO (el que tiene ventaja)
         const powerPlayTeam = isPenaltyOnHome ? 'away' : 'home';
         
-        // Determinar en qué lado mostrar la tarjeta del power play
-        // La tarjeta siempre va del lado del equipo que TIENE el power play
-        let showOnRight = false;
-        
-        if (homeDefending === 'left') {
-          // HOME defiende izquierda → HOME está en DERECHA del panel, AWAY en IZQUIERDA
-          showOnRight = (powerPlayTeam === 'home'); // Si HOME tiene PP → derecha
-        } else if (homeDefending === 'right') {
-          // HOME defiende derecha → HOME está en IZQUIERDA del panel, AWAY en DERECHA  
-          showOnRight = (powerPlayTeam === 'away'); // Si AWAY tiene PP → derecha
-        } else {
-          // Fallback: sin homeDefending conocido, asumir disposición estándar
-          showOnRight = (powerPlayTeam === 'home');
-        }
+        // LÓGICA SIMPLIFICADA: El equipo que seguimos SIEMPRE está a la IZQUIERDA
+        // Si seguimos a HOME (isHome=true) y HOME tiene PP → IZQUIERDA (showOnRight=false)
+        // Si seguimos a HOME (isHome=true) y AWAY tiene PP → DERECHA (showOnRight=true)
+        // Si seguimos a AWAY (isHome=false) y AWAY tiene PP → IZQUIERDA (showOnRight=false)
+        // Si seguimos a AWAY (isHome=false) y HOME tiene PP → DERECHA (showOnRight=true)
+        const showOnRight = (isHome && powerPlayTeam === 'away') || (!isHome && powerPlayTeam === 'home');
         
         processedPenalties.add(eventId);
         newPenaltiesDetected++;
         
-        addLog(`⚡ Nuevo POWER PLAY: ${duration} min - Equipo: ${powerPlayTeam.toUpperCase()} - Mostrar: ${showOnRight ? 'DERECHA' : 'IZQUIERDA'} (Event ${eventId})`, 'warning');
+        const ourTeam = isHome ? 'HOME' : 'AWAY';
+        const hasAdvantage = (isHome && powerPlayTeam === 'home') || (!isHome && powerPlayTeam === 'away');
+        addLog(`⚡ Nuevo POWER PLAY: ${powerPlayTeam.toUpperCase()} - ${hasAdvantage ? 'NUESTRO' : 'RIVAL'} (${showOnRight ? 'DERECHA' : 'IZQUIERDA'}) - Event ${eventId}`, 'warning');
         
         // Crear tarjeta de POWER PLAY (sin countdown)
         createPowerPlayCard(eventId, showOnRight, homeDefending);
@@ -1286,22 +1280,12 @@
       }
       
       // No hay tarjetas pero SÍ hay power play activo -> RECREAR
-      addLog(`🔄 Recreando tarjeta de Power Play perdida para ${powerPlayTeam.toUpperCase()}`, 'warning');
+      const ourTeam = isHome ? 'HOME' : 'AWAY';
+      const hasAdvantage = (isHome && powerPlayTeam === 'home') || (!isHome && powerPlayTeam === 'away');
+      addLog(`🔄 Recreando tarjeta de Power Play para ${powerPlayTeam.toUpperCase()} - ${hasAdvantage ? 'NUESTRO' : 'RIVAL'}`, 'warning');
       
-      // Determinar en qué lado mostrar la tarjeta del power play
-      // La tarjeta siempre va del lado del equipo que TIENE el power play
-      let showOnRight = false;
-      
-      if (homeDefending === 'left') {
-        // HOME defiende izquierda → HOME está en DERECHA del panel, AWAY en IZQUIERDA
-        showOnRight = (powerPlayTeam === 'home'); // Si HOME tiene PP → derecha
-      } else if (homeDefending === 'right') {
-        // HOME defiende derecha → HOME está en IZQUIERDA del panel, AWAY en DERECHA
-        showOnRight = (powerPlayTeam === 'away'); // Si AWAY tiene PP → derecha
-      } else {
-        // Fallback: sin homeDefending conocido, asumir disposición estándar
-        showOnRight = (powerPlayTeam === 'home');
-      }
+      // LÓGICA SIMPLIFICADA: El equipo que seguimos SIEMPRE está a la IZQUIERDA
+      const showOnRight = (isHome && powerPlayTeam === 'away') || (!isHome && powerPlayTeam === 'home');
       
       // Crear un eventId temporal basado en timestamp
       const tempEventId = `temp_pp_${Date.now()}`;
@@ -1309,7 +1293,7 @@
       // Crear la tarjeta
       createPowerPlayCard(tempEventId, showOnRight, homeDefending);
       
-      addLog(`✅ Tarjeta de Power Play recreada: ${powerPlayTeam.toUpperCase()} ${advantagePlayers}v${disadvantagePlayers} - Lado: ${showOnRight ? 'DERECHA' : 'IZQUIERDA'}`, 'success');
+      addLog(`✅ Tarjeta recreada: ${hasAdvantage ? 'NUESTRO' : 'RIVAL'} ${advantagePlayers}v${disadvantagePlayers} - ${showOnRight ? 'DERECHA' : 'IZQUIERDA'}`, 'success');
     }
     
     /**
