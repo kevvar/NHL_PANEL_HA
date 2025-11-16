@@ -1209,12 +1209,12 @@
       const currentSituation = latestPlay?.situationCode || "1551";
       const homeDefending = latestPlay?.homeTeamDefendingSide;
       
-      // Parsear situationCode (formato: "1551" = 1 portero, 5 jugadores, 5 jugadores, 1 portero)
+      // Parsear situationCode (formato: "1451" = AWAY: 1G 4P, HOME: 5P 1G)
       if (currentSituation.length === 4) {
-        const homeGoalies = parseInt(currentSituation[0]);
-        const homePlayers = parseInt(currentSituation[1]);
-        const awayPlayers = parseInt(currentSituation[2]);
-        const awayGoalies = parseInt(currentSituation[3]);
+        const awayGoalies = parseInt(currentSituation[0]);
+        const awayPlayers = parseInt(currentSituation[1]);
+        const homePlayers = parseInt(currentSituation[2]);
+        const homeGoalies = parseInt(currentSituation[3]);
         
         // Detectar empty net (portero = 0)
         const homeEmptyNet = homeGoalies === 0;
@@ -1225,9 +1225,13 @@
         if (hasEmptyNet) {
           // El equipo SIN portero es donde se muestra la tarjeta
           const emptyNetTeam = homeEmptyNet ? 'home' : 'away';
-          const showOnRight = (emptyNetTeam === 'home');
           
-          const side = showOnRight ? 'DERECHA (HOME)' : 'IZQUIERDA (AWAY)';
+          // Determinar posición en EL PANEL
+          const weAreHome = isHome;
+          const isOurEmptyNet = (weAreHome && homeEmptyNet) || (!weAreHome && awayEmptyNet);
+          const showOnRight = !isOurEmptyNet; // Si NO es nuestro empty net, va a la derecha
+          
+          const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
           addLog(`🥅 EMPTY NET detectado en ${emptyNetTeam.toUpperCase()} - ${side}`, 'info');
           
           const situationId = `situation_${emptyNetTeam}_EN`;
@@ -1275,23 +1279,23 @@
           disadvantagePlayers = homePlayers;
         }
         
-        // Determinar posición según estándar NHL: HOME=DERECHA, AWAY=IZQUIERDA
-        const showOnRight = (powerPlayTeam === 'home');
-        
-        // Determinar si es nuestro power play o del rival
+        // Determinar posición en EL PANEL (no según estándar NHL)
+        // teams[0] = Tu equipo (izquierda), teams[1] = Rival (derecha)
+        // La tarjeta va donde ESTÉ el equipo con ventaja en TU panel
         const weAreHome = isHome;
         const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
+        const showOnRight = !weHaveAdvantage; // Si NO es nuestro, va a la derecha (rival)
         
-        const side = showOnRight ? 'DERECHA (HOME)' : 'IZQUIERDA (AWAY)';
+        const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
         const penalizedTeam = powerPlayTeam === 'home' ? 'AWAY' : 'HOME';
         
         // DEBUG COMPLETO
         addLog(`🔍 DEBUG situationCode: ${currentSituation}`, 'debug');
-        addLog(`🔍 DEBUG parsed: HOME=${homeGoalies}G ${homePlayers}P vs AWAY=${awayGoalies}G ${awayPlayers}P`, 'debug');
+        addLog(`🔍 DEBUG parsed: AWAY=${awayGoalies}G ${awayPlayers}P vs HOME=${homeGoalies}G ${homePlayers}P`, 'debug');
         addLog(`🔍 DEBUG powerPlayTeam="${powerPlayTeam}" (quien TIENE ventaja)`, 'debug');
         addLog(`🔍 DEBUG penalizedTeam="${penalizedTeam}" (quien COMETIÓ penalty)`, 'debug');
-        addLog(`🔍 DEBUG showOnRight=${showOnRight} (${side})`, 'debug');
         addLog(`🔍 DEBUG weAreHome=${weAreHome}, weHaveAdvantage=${weHaveAdvantage}`, 'debug');
+        addLog(`🔍 DEBUG showOnRight=${showOnRight} (${side})`, 'debug');
         
         addLog(`⚡ PP: ${powerPlayTeam.toUpperCase()} tiene ventaja (${penalizedTeam} penalizado) ${advantagePlayers}v${disadvantagePlayers} - ${weHaveAdvantage ? 'NUESTRO' : 'RIVAL'} - ${side}`, 'info');
         
@@ -1384,24 +1388,11 @@
         }
       }
       
-      // Determinar el orden real de los equipos en el DOM
-      // teams[0] = Equipo seguido (puede ser HOME o AWAY)
-      // teams[1] = Rival
-      const firstTeamBadge = teams[0].querySelector('.team-badge');
-      const firstTeamIsHome = firstTeamBadge && firstTeamBadge.textContent.trim() === 'HOME';
+      // teams[0] = Tu equipo (izquierda), teams[1] = Rival (derecha)
+      const targetTeam = showOnRight ? teams[1] : teams[0];
       
-      // Seleccionar el equipo correcto según posición NHL estándar
-      let targetTeam;
-      if (showOnRight) {
-        // Queremos HOME (derecha)
-        targetTeam = firstTeamIsHome ? teams[0] : teams[1];
-      } else {
-        // Queremos AWAY (izquierda)
-        targetTeam = firstTeamIsHome ? teams[1] : teams[0];
-      }
-      
-      const side = showOnRight ? 'DERECHA (HOME)' : 'IZQUIERDA (AWAY)';
-      addLog(`📍 Creando tarjeta POWER PLAY en: ${side} (firstTeamIsHome=${firstTeamIsHome})`, 'info');
+      const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
+      addLog(`📍 Creando tarjeta en: ${side}`, 'info');
       
       let penaltyContainer = targetTeam.querySelector('.penalty-container');
       
