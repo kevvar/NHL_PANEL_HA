@@ -1156,8 +1156,8 @@
     }
     
     /**
-     * Processes penalties and creates timer cards
-     * UPDATED: Now shows POWER PLAY on the team with advantage
+     * Processes penalties and marks them as processed
+     * UPDATED: NO longer creates cards, only registers events
      */
     function processPenalties(playByPlayData, isHome) {
       if (!playByPlayData?.plays) return;
@@ -1177,53 +1177,29 @@
         }
         
         const duration = play.details?.duration || 2;
-        const homeDefending = play.homeTeamDefendingSide;
-        
         const teamSide = determineTeamFromEvent(play, playByPlayData);
         if (teamSide === null) continue;
         
         const isPenaltyOnHome = (teamSide === 'home');
-        
-        // POWER PLAY goes to the OPPOSITE team (the one with advantage)
         const powerPlayTeam = isPenaltyOnHome ? 'away' : 'home';
-        
-        // NHL STANDARD LOGIC: HOME always on RIGHT, AWAY on LEFT
-        // If following HOME and HOME has PP → RIGHT (showOnRight=true)
-        // If following HOME and AWAY has PP → LEFT (showOnRight=false)
-        // If following AWAY and AWAY has PP → LEFT (showOnRight=false)
-        // If following AWAY and HOME has PP → RIGHT (showOnRight=true)
-        // Result: showOnRight = true if powerPlayTeam is HOME
-        const showOnRight = (powerPlayTeam === 'home');
         
         processedPenalties.add(eventId);
         newPenaltiesDetected++;
         
-        const weAreHome = isHome;
-        const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
-        const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
-        addLog(`⚡ POWER PLAY: ${powerPlayTeam.toUpperCase()} - ${weHaveAdvantage ? 'OURS' : 'OPPONENT'} - ${side} - Event ${eventId}`, 'warning');
-        
-        // Create POWER PLAY card (no countdown)
-        createPowerPlayCard(eventId, showOnRight, homeDefending);
+        addLog(`⚠️ Penalty detected: ${teamSide.toUpperCase()} (${duration} min) - Event ${eventId}`, 'warning');
       }
       
-      // IMPORTANT: Only check situationCode if we DON'T detect new penalties
-      // This prevents deleting cards we just created
-      if (newPenaltiesDetected === 0) {
-        // Check situationCode to end active power plays
-        checkPowerPlayStatus(playByPlayData, isHome);
-      } else {
-        addLog(`⏸️ Skipping checkPowerPlayStatus (${newPenaltiesDetected} penalty(s) just detected)`, 'info');
-      }
+      // ALWAYS check situationCode to update cards
+      checkPowerPlayStatus(playByPlayData, isHome);
       
       if (newPenaltiesDetected > 0 || skippedPenalties > 0) {
-        addLog(`📊 Power Plays: ${newPenaltiesDetected} new, ${skippedPenalties} already processed`, 'info');
+        addLog(`📊 Penalties: ${newPenaltiesDetected} new, ${skippedPenalties} already processed`, 'info');
       }
     }
     
     /**
-     * Checks current situationCode and removes power plays when it returns to 1551
-     * IMPROVED: Now recreates cards if it detects active power play but no cards exist
+     * Checks current situationCode and manages the single power play card
+     * REFACTORED: Now creates/updates ONE SINGLE card based 100% on situationCode
      */
     function checkPowerPlayStatus(playByPlayData, isHome) {
       if (!playByPlayData?.plays || playByPlayData.plays.length === 0) return;
@@ -1240,94 +1216,113 @@
         const awayPlayers = parseInt(currentSituation[2]);
         const awayGoalies = parseInt(currentSituation[3]);
         
-        // Detect who has advantage
-        if (homePlayers > awayPlayers) {
-          // Home has advantage
-          addLog(`⚡ Power Play active: HOME ${homePlayers}v${awayPlayers}`, 'info');
+        // Detect empty net (goalie = 0)
+        const homeEmptyNet = homeGoalies === 0;
+        const awayEmptyNet = awayGoalies === 0;
+        const hasEmptyNet = homeEmptyNet || awayEmptyNet;
+        
+        // If there's empty net, show EMPTY NET card
+        if (hasEmptyNet) {
+          // The team WITHOUT goalie is where the card is shown
+          const emptyNetTeam = homeEmptyNet ? 'home' : 'away';
+          const showOnRight = (emptyNetTeam === 'home');
           
-          // NEW: Check if card exists, if not, create it
-          ensurePowerPlayCard('home', homeDefending, homePlayers, awayPlayers, isHome);
+          const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
+          addLog(`🥅 EMPTY NET detected in ${emptyNetTeam.toUpperCase()} - ${side}`, 'info');
           
-        } else if (awayPlayers > homePlayers) {
-          // Away has advantage
-          addLog(`⚡ Power Play active: AWAY ${awayPlayers}v${homePlayers}`, 'info');
+          const situationId = `situation_${emptyNetTeam}_EN`;
+          const existingCard = document.querySelector(`.penalty-card[data-penalty-id="${situationId}"]`);
           
-          // NEW: Check if card exists, if not, create it
-          ensurePowerPlayCard('away', homeDefending, awayPlayers, homePlayers, isHome);
-          
-        } else if (currentSituation === "1551") {
-          // Even game (5v5), remove all cards
-          if (activePenalties.size > 0) {
-            addLog(`✅ Power Plays ended - Situation: ${currentSituation}`, 'success');
+          if (!existingCard) {
             removeAllPowerPlayCards();
+            createPowerPlayCard(situationId, showOnRight, homeDefending, 0, 0, true);
+            
+            activePenalties.set(situationId, {
+              intervalId: null,
+              showOnRight: showOnRight,
+              startTime: Date.now(),
+              situation: 'EN',
+              emptyNet: true
+            });
           }
+          return;
         }
         
-        // Update numerical situation in existing cards
-        updatePowerPlaySituation(homePlayers, awayPlayers);
-      }
-    }
-    
-    /**
-     * Ensures a power play card exists for the team with advantage
-     * If it doesn't exist, creates it automatically
-     */
-    function ensurePowerPlayCard(powerPlayTeam, homeDefending, advantagePlayers, disadvantagePlayers, isHome) {
-      // Check if there are already active cards
-      const existingCards = document.querySelectorAll('.penalty-card');
-      
-      if (existingCards.length > 0) {
-        // Cards already exist, do nothing
-        return;
-      }
-      
-      // No cards but there IS an active power play -> RECREATE
-      const weAreHome = isHome;
-      const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
-      addLog(`🔄 Recreating Power Play card for ${powerPlayTeam.toUpperCase()} - ${weHaveAdvantage ? 'OURS' : 'OPPONENT'}`, 'warning');
-      
-      // NHL STANDARD LOGIC: HOME on RIGHT, AWAY on LEFT
-      const showOnRight = (powerPlayTeam === 'home');
-      
-      // Create a temporary eventId based on timestamp
-      const tempEventId = `temp_pp_${Date.now()}`;
-      
-      // Create the card
-      createPowerPlayCard(tempEventId, showOnRight, homeDefending);
-      
-      const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
-      addLog(`✅ Card recreated: ${weHaveAdvantage ? 'OURS' : 'OPPONENT'} ${advantagePlayers}v${disadvantagePlayers} - ${side}`, 'success');
-    }
-    
-    /**
-     * Updates the numerical situation text in active cards
-     */
-    function updatePowerPlaySituation(homePlayers, awayPlayers) {
-      activePenalties.forEach((penalty, eventId) => {
-        const cards = document.querySelectorAll(`.penalty-card[data-penalty-id="${eventId}"]`);
-        cards.forEach(card => {
-          const situationEl = card.querySelector('.power-play-situation');
-          if (situationEl) {
-            // Determine who has advantage based on card side
-            if (penalty.showOnRight) {
-              // If on the right, could be HOME or AWAY depending on homeDefending
-              // For simplicity, always show numerical advantage
-              if (homePlayers > awayPlayers) {
-                situationEl.textContent = `${homePlayers}v${awayPlayers}`;
-              } else if (awayPlayers > homePlayers) {
-                situationEl.textContent = `${awayPlayers}v${homePlayers}`;
-              }
-            } else {
-              // Same logic for left
-              if (homePlayers > awayPlayers) {
-                situationEl.textContent = `${homePlayers}v${awayPlayers}`;
-              } else if (awayPlayers > homePlayers) {
-                situationEl.textContent = `${awayPlayers}v${homePlayers}`;
-              }
-            }
+        // Detect if there's numerical advantage (power play)
+        const hasPowerPlay = homePlayers !== awayPlayers;
+        
+        if (!hasPowerPlay) {
+          // Even game (5v5, 4v4, 3v3, etc.) - remove all cards
+          if (activePenalties.size > 0) {
+            addLog(`✅ Even game - Situation: ${currentSituation} (${homePlayers}v${awayPlayers})`, 'success');
+            removeAllPowerPlayCards();
           }
-        });
-      });
+          return;
+        }
+        
+        // THERE IS power play - determine who has advantage
+        let powerPlayTeam, advantagePlayers, disadvantagePlayers;
+        
+        if (homePlayers > awayPlayers) {
+          // HOME has MORE players = HOME has ADVANTAGE (AWAY has penalty)
+          powerPlayTeam = 'home';
+          advantagePlayers = homePlayers;
+          disadvantagePlayers = awayPlayers;
+        } else {
+          // AWAY has MORE players = AWAY has ADVANTAGE (HOME has penalty)
+          powerPlayTeam = 'away';
+          advantagePlayers = awayPlayers;
+          disadvantagePlayers = homePlayers;
+        }
+        
+        // Determine position according to NHL standard: HOME=RIGHT, AWAY=LEFT
+        const showOnRight = (powerPlayTeam === 'home');
+        
+        // Determine if it's our power play or opponent's
+        const weAreHome = isHome;
+        const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
+        
+        const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
+        const penalizedTeam = powerPlayTeam === 'home' ? 'AWAY' : 'HOME';
+        
+        // COMPLETE DEBUG
+        addLog(`🔍 DEBUG situationCode: ${currentSituation}`, 'debug');
+        addLog(`🔍 DEBUG parsed: HOME=${homeGoalies}G ${homePlayers}P vs AWAY=${awayGoalies}G ${awayPlayers}P`, 'debug');
+        addLog(`🔍 DEBUG powerPlayTeam="${powerPlayTeam}" (who HAS advantage)`, 'debug');
+        addLog(`🔍 DEBUG penalizedTeam="${penalizedTeam}" (who COMMITTED penalty)`, 'debug');
+        addLog(`🔍 DEBUG showOnRight=${showOnRight} (${side})`, 'debug');
+        addLog(`🔍 DEBUG weAreHome=${weAreHome}, weHaveAdvantage=${weHaveAdvantage}`, 'debug');
+        
+        addLog(`⚡ PP: ${powerPlayTeam.toUpperCase()} has advantage (${penalizedTeam} penalized) ${advantagePlayers}v${disadvantagePlayers} - ${weHaveAdvantage ? 'OURS' : 'OPPONENT'} - ${side}`, 'info');
+        
+        
+        // Create unique ID for this situation
+        const situationId = `situation_${powerPlayTeam}_${advantagePlayers}v${disadvantagePlayers}`;
+        
+        // Check if a card already exists for this situation
+        const existingCard = document.querySelector(`.penalty-card[data-penalty-id="${situationId}"]`);
+        
+        if (existingCard) {
+          // Card already exists, just update the numerical text
+          const situationEl = existingCard.querySelector('.power-play-situation');
+          if (situationEl) {
+            situationEl.textContent = `${advantagePlayers}v${disadvantagePlayers}`;
+          }
+        } else {
+          // Card doesn't exist - remove any old cards and create new one
+          removeAllPowerPlayCards();
+          createPowerPlayCard(situationId, showOnRight, homeDefending, advantagePlayers, disadvantagePlayers, false);
+          
+          // Save reference
+          activePenalties.set(situationId, {
+            intervalId: null,
+            showOnRight: showOnRight,
+            startTime: Date.now(),
+            situation: `${advantagePlayers}v${disadvantagePlayers}`,
+            emptyNet: false
+          });
+        }
+      }
     }
     
     /**
@@ -1372,16 +1367,16 @@
     }
     
     /**
-     * Creates a visual POWER PLAY card (no countdown)
+     * Creates a single visual POWER PLAY card based on situationCode
      */
-    function createPowerPlayCard(eventId, showOnRight, homeDefending, retryCount = 0) {
+    function createPowerPlayCard(situationId, showOnRight, homeDefending, advantagePlayers = 5, disadvantagePlayers = 4, isEmptyNet = false, retryCount = 0) {
       const teams = document.querySelectorAll('.main-score .team');
       
       if (teams.length !== 2) {
         if (retryCount < 3) {
           addLog(`⏳ DOM not ready, retrying to create power play card (${retryCount + 1}/3)...`, 'info');
           setTimeout(() => {
-            createPowerPlayCard(eventId, showOnRight, homeDefending, retryCount + 1);
+            createPowerPlayCard(situationId, showOnRight, homeDefending, advantagePlayers, disadvantagePlayers, isEmptyNet, retryCount + 1);
           }, 500);
           return;
         } else {
@@ -1390,9 +1385,24 @@
         }
       }
       
-      const targetTeam = showOnRight ? teams[1] : teams[0];
+      // Determine the actual order of teams in the DOM
+      // teams[0] = Followed team (can be HOME or AWAY)
+      // teams[1] = Opponent
+      const firstTeamBadge = teams[0].querySelector('.team-badge');
+      const firstTeamIsHome = firstTeamBadge && firstTeamBadge.textContent.trim() === 'HOME';
       
-      addLog(`📍 Creating POWER PLAY card on: ${showOnRight ? 'RIGHT' : 'LEFT'}`, 'info');
+      // Select the correct team according to NHL standard position
+      let targetTeam;
+      if (showOnRight) {
+        // We want HOME (right)
+        targetTeam = firstTeamIsHome ? teams[0] : teams[1];
+      } else {
+        // We want AWAY (left)
+        targetTeam = firstTeamIsHome ? teams[1] : teams[0];
+      }
+      
+      const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
+      addLog(`📍 Creating POWER PLAY card at: ${side} (firstTeamIsHome=${firstTeamIsHome})`, 'info');
       
       let penaltyContainer = targetTeam.querySelector('.penalty-container');
       
@@ -1416,11 +1426,16 @@
       
       const card = document.createElement('div');
       card.className = 'penalty-card';
-      card.setAttribute('data-penalty-id', eventId);
+      card.setAttribute('data-penalty-id', situationId);
+      
+      const borderColor = isEmptyNet ? '#f39c12' : '#2ecc71';
+      const bgGradient = isEmptyNet 
+        ? 'linear-gradient(135deg, rgba(243, 156, 18, 0.15), rgba(230, 126, 34, 0.15))'
+        : 'linear-gradient(135deg, rgba(46, 204, 113, 0.15), rgba(52, 211, 153, 0.15))';
       
       card.style.cssText = `
-        background: linear-gradient(135deg, rgba(46, 204, 113, 0.15), rgba(52, 211, 153, 0.15));
-        border-left: 3px solid #2ecc71;
+        background: ${bgGradient};
+        border-left: 3px solid ${borderColor};
         border-radius: 0.4rem;
         padding: 0.5rem 0.7rem;
         display: flex;
@@ -1433,18 +1448,18 @@
       
       card.innerHTML = `
         <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span style="font-size: 1.1rem;">⚡</span>
-          <span style="font-size: 0.8rem; font-weight: 600; color: #2ecc71;">POWER PLAY</span>
+          <span style="font-size: 1.1rem;">${isEmptyNet ? '🥅' : '⚡'}</span>
+          <span style="font-size: 0.8rem; font-weight: 600; color: ${isEmptyNet ? '#f39c12' : '#2ecc71'};">${isEmptyNet ? 'EMPTY NET' : 'POWER PLAY'}</span>
         </div>
-        <div style="
+        ${isEmptyNet ? '' : `<div style="
           font-size: 0.95rem;
           font-weight: 700;
           color: #fff;
           min-width: 2.5rem;
           text-align: right;
         " class="power-play-situation">
-          5v4
-        </div>
+          ${advantagePlayers}v${disadvantagePlayers}
+        </div>`}
       `;
       
       penaltyContainer.appendChild(card);
@@ -1478,18 +1493,7 @@
         document.head.appendChild(style);
       }
       
-      // Save reference (no intervalId because there's no countdown)
-      if (!activePenalties.has(eventId)) {
-        activePenalties.set(eventId, {
-          intervalId: null,
-          showOnRight: showOnRight,
-          startTime: Date.now()
-        });
-        
-        addLog(`✅ Power Play card created successfully - Event ${eventId}`, 'success');
-      } else {
-        addLog(`♻️ Power Play card re-created - Event ${eventId}`, 'info');
-      }
+      addLog(`✅ Card created: ${advantagePlayers}v${disadvantagePlayers} - ${side}`, 'success');
     }
     
     function formatPenaltyTime(seconds) {
@@ -1507,11 +1511,19 @@
     function restorePenaltyCards() {
       if (activePenalties.size === 0) return;
       
-      addLog(`♻️ Restoring ${activePenalties.size} POWER PLAY card(s)...`, 'info');
+      addLog(`♻️ Restoring ${activePenalties.size} card(s)...`, 'info');
       
-      activePenalties.forEach((penalty, eventId) => {
-        // Re-create the card without countdown
-        createPowerPlayCard(eventId, penalty.showOnRight, null, 0);
+      activePenalties.forEach((penalty, situationId) => {
+        if (penalty.emptyNet) {
+          // It's EMPTY NET, no numbers
+          createPowerPlayCard(situationId, penalty.showOnRight, null, 0, 0, true, 0);
+        } else {
+          // It's POWER PLAY, extract situation from ID
+          const parts = situationId.split('_');
+          const situation = parts[2] || '5v4';
+          const [adv, disadv] = situation.split('v').map(n => parseInt(n) || 5);
+          createPowerPlayCard(situationId, penalty.showOnRight, null, adv, disadv, false, 0);
+        }
       });
     }
     
