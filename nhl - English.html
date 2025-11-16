@@ -1209,12 +1209,12 @@
       const currentSituation = latestPlay?.situationCode || "1551";
       const homeDefending = latestPlay?.homeTeamDefendingSide;
       
-      // Parse situationCode (format: "1551" = 1 goalie, 5 players, 5 players, 1 goalie)
+      // Parse situationCode (format: "1451" = AWAY: 1G 4P, HOME: 5P 1G)
       if (currentSituation.length === 4) {
-        const homeGoalies = parseInt(currentSituation[0]);
-        const homePlayers = parseInt(currentSituation[1]);
-        const awayPlayers = parseInt(currentSituation[2]);
-        const awayGoalies = parseInt(currentSituation[3]);
+        const awayGoalies = parseInt(currentSituation[0]);
+        const awayPlayers = parseInt(currentSituation[1]);
+        const homePlayers = parseInt(currentSituation[2]);
+        const homeGoalies = parseInt(currentSituation[3]);
         
         // Detect empty net (goalie = 0)
         const homeEmptyNet = homeGoalies === 0;
@@ -1225,9 +1225,13 @@
         if (hasEmptyNet) {
           // The team WITHOUT goalie is where the card is shown
           const emptyNetTeam = homeEmptyNet ? 'home' : 'away';
-          const showOnRight = (emptyNetTeam === 'home');
           
-          const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
+          // Determine position in THE PANEL
+          const weAreHome = isHome;
+          const isOurEmptyNet = (weAreHome && homeEmptyNet) || (!weAreHome && awayEmptyNet);
+          const showOnRight = !isOurEmptyNet; // If NOT our empty net, goes to the right
+          
+          const side = showOnRight ? 'RIGHT (OPPONENT)' : 'LEFT (US)';
           addLog(`🥅 EMPTY NET detected in ${emptyNetTeam.toUpperCase()} - ${side}`, 'info');
           
           const situationId = `situation_${emptyNetTeam}_EN`;
@@ -1275,23 +1279,23 @@
           disadvantagePlayers = homePlayers;
         }
         
-        // Determine position according to NHL standard: HOME=RIGHT, AWAY=LEFT
-        const showOnRight = (powerPlayTeam === 'home');
-        
-        // Determine if it's our power play or opponent's
+        // Determine position in THE PANEL (not according to NHL standard)
+        // teams[0] = Your team (left), teams[1] = Opponent (right)
+        // The card goes where the team with advantage IS in YOUR panel
         const weAreHome = isHome;
         const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
+        const showOnRight = !weHaveAdvantage; // If NOT ours, goes to the right (opponent)
         
-        const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
+        const side = showOnRight ? 'RIGHT (OPPONENT)' : 'LEFT (US)';
         const penalizedTeam = powerPlayTeam === 'home' ? 'AWAY' : 'HOME';
         
         // COMPLETE DEBUG
         addLog(`🔍 DEBUG situationCode: ${currentSituation}`, 'debug');
-        addLog(`🔍 DEBUG parsed: HOME=${homeGoalies}G ${homePlayers}P vs AWAY=${awayGoalies}G ${awayPlayers}P`, 'debug');
+        addLog(`🔍 DEBUG parsed: AWAY=${awayGoalies}G ${awayPlayers}P vs HOME=${homeGoalies}G ${homePlayers}P`, 'debug');
         addLog(`🔍 DEBUG powerPlayTeam="${powerPlayTeam}" (who HAS advantage)`, 'debug');
         addLog(`🔍 DEBUG penalizedTeam="${penalizedTeam}" (who COMMITTED penalty)`, 'debug');
-        addLog(`🔍 DEBUG showOnRight=${showOnRight} (${side})`, 'debug');
         addLog(`🔍 DEBUG weAreHome=${weAreHome}, weHaveAdvantage=${weHaveAdvantage}`, 'debug');
+        addLog(`🔍 DEBUG showOnRight=${showOnRight} (${side})`, 'debug');
         
         addLog(`⚡ PP: ${powerPlayTeam.toUpperCase()} has advantage (${penalizedTeam} penalized) ${advantagePlayers}v${disadvantagePlayers} - ${weHaveAdvantage ? 'OURS' : 'OPPONENT'} - ${side}`, 'info');
         
@@ -1385,24 +1389,11 @@
         }
       }
       
-      // Determine the actual order of teams in the DOM
-      // teams[0] = Followed team (can be HOME or AWAY)
-      // teams[1] = Opponent
-      const firstTeamBadge = teams[0].querySelector('.team-badge');
-      const firstTeamIsHome = firstTeamBadge && firstTeamBadge.textContent.trim() === 'HOME';
+      // teams[0] = Your team (left), teams[1] = Opponent (right)
+      const targetTeam = showOnRight ? teams[1] : teams[0];
       
-      // Select the correct team according to NHL standard position
-      let targetTeam;
-      if (showOnRight) {
-        // We want HOME (right)
-        targetTeam = firstTeamIsHome ? teams[0] : teams[1];
-      } else {
-        // We want AWAY (left)
-        targetTeam = firstTeamIsHome ? teams[1] : teams[0];
-      }
-      
-      const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
-      addLog(`📍 Creating POWER PLAY card at: ${side} (firstTeamIsHome=${firstTeamIsHome})`, 'info');
+      const side = showOnRight ? 'RIGHT (OPPONENT)' : 'LEFT (US)';
+      addLog(`📍 Creating card at: ${side}`, 'info');
       
       let penaltyContainer = targetTeam.querySelector('.penalty-container');
       
