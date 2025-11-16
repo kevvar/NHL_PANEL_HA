@@ -1187,19 +1187,21 @@
         // POWER PLAY goes to the OPPOSITE team (the one with advantage)
         const powerPlayTeam = isPenaltyOnHome ? 'away' : 'home';
         
-        // SIMPLIFIED LOGIC: The team we're following is ALWAYS on the LEFT
-        // If following HOME (isHome=true) and HOME has PP → LEFT (showOnRight=false)
-        // If following HOME (isHome=true) and AWAY has PP → RIGHT (showOnRight=true)
-        // If following AWAY (isHome=false) and AWAY has PP → LEFT (showOnRight=false)
-        // If following AWAY (isHome=false) and HOME has PP → RIGHT (showOnRight=true)
-        const showOnRight = (isHome && powerPlayTeam === 'away') || (!isHome && powerPlayTeam === 'home');
+        // NHL STANDARD LOGIC: HOME always on RIGHT, AWAY on LEFT
+        // If following HOME and HOME has PP → RIGHT (showOnRight=true)
+        // If following HOME and AWAY has PP → LEFT (showOnRight=false)
+        // If following AWAY and AWAY has PP → LEFT (showOnRight=false)
+        // If following AWAY and HOME has PP → RIGHT (showOnRight=true)
+        // Result: showOnRight = true if powerPlayTeam is HOME
+        const showOnRight = (powerPlayTeam === 'home');
         
         processedPenalties.add(eventId);
         newPenaltiesDetected++;
         
-        const ourTeam = isHome ? 'HOME' : 'AWAY';
-        const hasAdvantage = (isHome && powerPlayTeam === 'home') || (!isHome && powerPlayTeam === 'away');
-        addLog(`⚡ New POWER PLAY: ${powerPlayTeam.toUpperCase()} - ${hasAdvantage ? 'OURS' : 'OPPONENT'} (${showOnRight ? 'RIGHT' : 'LEFT'}) - Event ${eventId}`, 'warning');
+        const weAreHome = isHome;
+        const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
+        const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
+        addLog(`⚡ POWER PLAY: ${powerPlayTeam.toUpperCase()} - ${weHaveAdvantage ? 'OURS' : 'OPPONENT'} - ${side} - Event ${eventId}`, 'warning');
         
         // Create POWER PLAY card (no countdown)
         createPowerPlayCard(eventId, showOnRight, homeDefending);
@@ -1280,12 +1282,12 @@
       }
       
       // No cards but there IS an active power play -> RECREATE
-      const ourTeam = isHome ? 'HOME' : 'AWAY';
-      const hasAdvantage = (isHome && powerPlayTeam === 'home') || (!isHome && powerPlayTeam === 'away');
-      addLog(`🔄 Recreating Power Play card for ${powerPlayTeam.toUpperCase()} - ${hasAdvantage ? 'OURS' : 'OPPONENT'}`, 'warning');
+      const weAreHome = isHome;
+      const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
+      addLog(`🔄 Recreating Power Play card for ${powerPlayTeam.toUpperCase()} - ${weHaveAdvantage ? 'OURS' : 'OPPONENT'}`, 'warning');
       
-      // SIMPLIFIED LOGIC: The team we're following is ALWAYS on the LEFT
-      const showOnRight = (isHome && powerPlayTeam === 'away') || (!isHome && powerPlayTeam === 'home');
+      // NHL STANDARD LOGIC: HOME on RIGHT, AWAY on LEFT
+      const showOnRight = (powerPlayTeam === 'home');
       
       // Create a temporary eventId based on timestamp
       const tempEventId = `temp_pp_${Date.now()}`;
@@ -1293,7 +1295,8 @@
       // Create the card
       createPowerPlayCard(tempEventId, showOnRight, homeDefending);
       
-      addLog(`✅ Card recreated: ${hasAdvantage ? 'OURS' : 'OPPONENT'} ${advantagePlayers}v${disadvantagePlayers} - ${showOnRight ? 'RIGHT' : 'LEFT'}`, 'success');
+      const side = showOnRight ? 'RIGHT (HOME)' : 'LEFT (AWAY)';
+      addLog(`✅ Card recreated: ${weHaveAdvantage ? 'OURS' : 'OPPONENT'} ${advantagePlayers}v${disadvantagePlayers} - ${side}`, 'success');
     }
     
     /**
@@ -1512,7 +1515,7 @@
       });
     }
     
-    async function processNHLData(teamName) {
+    async function processNHLData(teamName, teamHomeAway = 'home') {
       if (currentTeamName && currentTeamName !== teamName) {
         addLog(`🔄 Team change detected: ${currentTeamName} → ${teamName}`, 'warning');
         currentGameId = null;
@@ -1549,11 +1552,8 @@
         return;
       }
       
-      const homeTeamName = playByPlayData.homeTeam?.name?.default || '';
-      const awayTeamName = playByPlayData.awayTeam?.name?.default || '';
-      
-      const isHome = homeTeamName.toLowerCase().includes(teamName.toLowerCase()) ||
-                     playByPlayData.homeTeam?.abbrev === teamName.toUpperCase();
+      // Normalize teamHomeAway to lowercase
+      const isHome = (teamHomeAway || 'home').toLowerCase() === 'home';
       
       processPenalties(playByPlayData, isHome);
       
@@ -1864,7 +1864,7 @@
       const live = gameState === 'IN';
       
       if (live) {
-        await processNHLData(teamNameFromHA);
+        await processNHLData(teamNameFromHA, attr.team_homeaway);
       } else if (gameState === 'PRE' || gameState === 'FUT') {
         if (!currentGameId) {
           const gameInfo = await findGameId(teamNameFromHA);
