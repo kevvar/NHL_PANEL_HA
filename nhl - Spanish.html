@@ -1156,8 +1156,8 @@
     }
     
     /**
-     * Procesa penaltis y crea tarjetas con temporizador
-     * ACTUALIZADO: Ahora muestra POWER PLAY en el equipo con ventaja
+     * Procesa penaltis y los marca como procesados
+     * ACTUALIZADO: Ya NO crea tarjetas, solo registra los eventos
      */
     function processPenalties(playByPlayData, isHome) {
       if (!playByPlayData?.plays) return;
@@ -1177,53 +1177,29 @@
         }
         
         const duration = play.details?.duration || 2;
-        const homeDefending = play.homeTeamDefendingSide;
-        
         const teamSide = determineTeamFromEvent(play, playByPlayData);
         if (teamSide === null) continue;
         
         const isPenaltyOnHome = (teamSide === 'home');
-        
-        // POWER PLAY va al equipo CONTRARIO (el que tiene ventaja)
         const powerPlayTeam = isPenaltyOnHome ? 'away' : 'home';
-        
-        // LÓGICA ESTÁNDAR NHL: HOME siempre a la DERECHA, AWAY a la IZQUIERDA
-        // Si seguimos a HOME y HOME tiene PP → DERECHA (showOnRight=true)
-        // Si seguimos a HOME y AWAY tiene PP → IZQUIERDA (showOnRight=false)
-        // Si seguimos a AWAY y AWAY tiene PP → IZQUIERDA (showOnRight=false)
-        // Si seguimos a AWAY y HOME tiene PP → DERECHA (showOnRight=true)
-        // Resultado: showOnRight = true si powerPlayTeam es HOME
-        const showOnRight = (powerPlayTeam === 'home');
         
         processedPenalties.add(eventId);
         newPenaltiesDetected++;
         
-        const weAreHome = isHome;
-        const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
-        const side = showOnRight ? 'DERECHA (HOME)' : 'IZQUIERDA (AWAY)';
-        addLog(`⚡ POWER PLAY: ${powerPlayTeam.toUpperCase()} - ${weHaveAdvantage ? 'NUESTRO' : 'RIVAL'} - ${side} - Event ${eventId}`, 'warning');
-        
-        // Crear tarjeta de POWER PLAY (sin countdown)
-        createPowerPlayCard(eventId, showOnRight, homeDefending);
+        addLog(`⚠️ Penalty detectado: ${teamSide.toUpperCase()} (${duration} min) - Event ${eventId}`, 'warning');
       }
       
-      // IMPORTANTE: Solo revisar situationCode si NO detectamos penalties nuevos
-      // Esto evita eliminar las tarjetas que acabamos de crear
-      if (newPenaltiesDetected === 0) {
-        // Revisar situationCode para terminar power plays activos
-        checkPowerPlayStatus(playByPlayData, isHome);
-      } else {
-        addLog(`⏸️ Saltando checkPowerPlayStatus (${newPenaltiesDetected} penalty(s) recién detectado(s))`, 'info');
-      }
+      // SIEMPRE revisar situationCode para actualizar tarjetas
+      checkPowerPlayStatus(playByPlayData, isHome);
       
       if (newPenaltiesDetected > 0 || skippedPenalties > 0) {
-        addLog(`📊 Power Plays: ${newPenaltiesDetected} nuevo(s), ${skippedPenalties} ya procesado(s)`, 'info');
+        addLog(`📊 Penalties: ${newPenaltiesDetected} nuevo(s), ${skippedPenalties} ya procesado(s)`, 'info');
       }
     }
     
     /**
-     * Revisa el situationCode actual y elimina power plays cuando vuelve a 1551
-     * MEJORADO: Ahora recrea tarjetas si detecta power play activo pero no hay tarjetas
+     * Revisa el situationCode actual y gestiona la tarjeta de power play única
+     * REFACTORIZADO: Ahora crea/actualiza UNA SOLA tarjeta basándose 100% en situationCode
      */
     function checkPowerPlayStatus(playByPlayData, isHome) {
       if (!playByPlayData?.plays || playByPlayData.plays.length === 0) return;
@@ -1240,94 +1216,112 @@
         const awayPlayers = parseInt(currentSituation[2]);
         const awayGoalies = parseInt(currentSituation[3]);
         
-        // Detectar quién tiene ventaja
-        if (homePlayers > awayPlayers) {
-          // Home tiene ventaja
-          addLog(`⚡ Power Play activo: HOME ${homePlayers}v${awayPlayers}`, 'info');
+        // Detectar empty net (portero = 0)
+        const homeEmptyNet = homeGoalies === 0;
+        const awayEmptyNet = awayGoalies === 0;
+        const hasEmptyNet = homeEmptyNet || awayEmptyNet;
+        
+        // Si hay empty net, mostrar tarjeta EMPTY NET
+        if (hasEmptyNet) {
+          // El equipo SIN portero es donde se muestra la tarjeta
+          const emptyNetTeam = homeEmptyNet ? 'home' : 'away';
+          const showOnRight = (emptyNetTeam === 'home');
           
-          // NUEVO: Verificar si existe tarjeta, si no, crearla
-          ensurePowerPlayCard('home', homeDefending, homePlayers, awayPlayers, isHome);
+          const side = showOnRight ? 'DERECHA (HOME)' : 'IZQUIERDA (AWAY)';
+          addLog(`🥅 EMPTY NET detectado en ${emptyNetTeam.toUpperCase()} - ${side}`, 'info');
           
-        } else if (awayPlayers > homePlayers) {
-          // Away tiene ventaja
-          addLog(`⚡ Power Play activo: AWAY ${awayPlayers}v${homePlayers}`, 'info');
+          const situationId = `situation_${emptyNetTeam}_EN`;
+          const existingCard = document.querySelector(`.penalty-card[data-penalty-id="${situationId}"]`);
           
-          // NUEVO: Verificar si existe tarjeta, si no, crearla
-          ensurePowerPlayCard('away', homeDefending, awayPlayers, homePlayers, isHome);
-          
-        } else if (currentSituation === "1551") {
-          // Juego parejo (5v5), eliminar todas las tarjetas
-          if (activePenalties.size > 0) {
-            addLog(`✅ Power Plays terminados - Situación: ${currentSituation}`, 'success');
+          if (!existingCard) {
             removeAllPowerPlayCards();
+            createPowerPlayCard(situationId, showOnRight, homeDefending, 0, 0, true);
+            
+            activePenalties.set(situationId, {
+              intervalId: null,
+              showOnRight: showOnRight,
+              startTime: Date.now(),
+              situation: 'EN',
+              emptyNet: true
+            });
           }
+          return;
         }
         
-        // Actualizar situación numérica en las tarjetas existentes
-        updatePowerPlaySituation(homePlayers, awayPlayers);
-      }
-    }
-    
-    /**
-     * Asegura que exista una tarjeta de power play para el equipo con ventaja
-     * Si no existe, la crea automáticamente
-     */
-    function ensurePowerPlayCard(powerPlayTeam, homeDefending, advantagePlayers, disadvantagePlayers, isHome) {
-      // Verificar si ya hay tarjetas activas
-      const existingCards = document.querySelectorAll('.penalty-card');
-      
-      if (existingCards.length > 0) {
-        // Ya hay tarjetas, no hacer nada
-        return;
-      }
-      
-      // No hay tarjetas pero SÍ hay power play activo -> RECREAR
-      const weAreHome = isHome;
-      const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
-      addLog(`🔄 Recreando tarjeta de Power Play para ${powerPlayTeam.toUpperCase()} - ${weHaveAdvantage ? 'NUESTRO' : 'RIVAL'}`, 'warning');
-      
-      // LÓGICA ESTÁNDAR NHL: HOME a la DERECHA, AWAY a la IZQUIERDA
-      const showOnRight = (powerPlayTeam === 'home');
-      
-      // Crear un eventId temporal basado en timestamp
-      const tempEventId = `temp_pp_${Date.now()}`;
-      
-      // Crear la tarjeta
-      createPowerPlayCard(tempEventId, showOnRight, homeDefending);
-      
-      const side = showOnRight ? 'DERECHA (HOME)' : 'IZQUIERDA (AWAY)';
-      addLog(`✅ Tarjeta recreada: ${weHaveAdvantage ? 'NUESTRO' : 'RIVAL'} ${advantagePlayers}v${disadvantagePlayers} - ${side}`, 'success');
-    }
-    
-    /**
-     * Actualiza el texto de situación numérica en las tarjetas activas
-     */
-    function updatePowerPlaySituation(homePlayers, awayPlayers) {
-      activePenalties.forEach((penalty, eventId) => {
-        const cards = document.querySelectorAll(`.penalty-card[data-penalty-id="${eventId}"]`);
-        cards.forEach(card => {
-          const situationEl = card.querySelector('.power-play-situation');
-          if (situationEl) {
-            // Determinar quién tiene ventaja según el lado de la tarjeta
-            if (penalty.showOnRight) {
-              // Si está a la derecha, puede ser HOME o AWAY dependiendo de homeDefending
-              // Por simplicidad, mostrar siempre la ventaja numérica
-              if (homePlayers > awayPlayers) {
-                situationEl.textContent = `${homePlayers}v${awayPlayers}`;
-              } else if (awayPlayers > homePlayers) {
-                situationEl.textContent = `${awayPlayers}v${homePlayers}`;
-              }
-            } else {
-              // Misma lógica para izquierda
-              if (homePlayers > awayPlayers) {
-                situationEl.textContent = `${homePlayers}v${awayPlayers}`;
-              } else if (awayPlayers > homePlayers) {
-                situationEl.textContent = `${awayPlayers}v${homePlayers}`;
-              }
-            }
+        // Detectar si hay ventaja numérica (power play)
+        const hasPowerPlay = homePlayers !== awayPlayers;
+        
+        if (!hasPowerPlay) {
+          // Juego parejo (5v5, 4v4, 3v3, etc.) - eliminar todas las tarjetas
+          if (activePenalties.size > 0) {
+            addLog(`✅ Juego parejo - Situación: ${currentSituation} (${homePlayers}v${awayPlayers})`, 'success');
+            removeAllPowerPlayCards();
           }
-        });
-      });
+          return;
+        }
+        
+        // HAY power play - determinar quién tiene ventaja
+        let powerPlayTeam, advantagePlayers, disadvantagePlayers;
+        
+        if (homePlayers > awayPlayers) {
+          // HOME tiene MÁS jugadores = HOME tiene VENTAJA (AWAY tiene penalty)
+          powerPlayTeam = 'home';
+          advantagePlayers = homePlayers;
+          disadvantagePlayers = awayPlayers;
+        } else {
+          // AWAY tiene MÁS jugadores = AWAY tiene VENTAJA (HOME tiene penalty)
+          powerPlayTeam = 'away';
+          advantagePlayers = awayPlayers;
+          disadvantagePlayers = homePlayers;
+        }
+        
+        // Determinar posición según estándar NHL: HOME=DERECHA, AWAY=IZQUIERDA
+        const showOnRight = (powerPlayTeam === 'home');
+        
+        // Determinar si es nuestro power play o del rival
+        const weAreHome = isHome;
+        const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
+        
+        const side = showOnRight ? 'DERECHA (HOME)' : 'IZQUIERDA (AWAY)';
+        const penalizedTeam = powerPlayTeam === 'home' ? 'AWAY' : 'HOME';
+        
+        // DEBUG COMPLETO
+        addLog(`🔍 DEBUG situationCode: ${currentSituation}`, 'debug');
+        addLog(`🔍 DEBUG parsed: HOME=${homeGoalies}G ${homePlayers}P vs AWAY=${awayGoalies}G ${awayPlayers}P`, 'debug');
+        addLog(`🔍 DEBUG powerPlayTeam="${powerPlayTeam}" (quien TIENE ventaja)`, 'debug');
+        addLog(`🔍 DEBUG penalizedTeam="${penalizedTeam}" (quien COMETIÓ penalty)`, 'debug');
+        addLog(`🔍 DEBUG showOnRight=${showOnRight} (${side})`, 'debug');
+        addLog(`🔍 DEBUG weAreHome=${weAreHome}, weHaveAdvantage=${weHaveAdvantage}`, 'debug');
+        
+        addLog(`⚡ PP: ${powerPlayTeam.toUpperCase()} tiene ventaja (${penalizedTeam} penalizado) ${advantagePlayers}v${disadvantagePlayers} - ${weHaveAdvantage ? 'NUESTRO' : 'RIVAL'} - ${side}`, 'info');
+        
+        // Crear ID único para esta situación
+        const situationId = `situation_${powerPlayTeam}_${advantagePlayers}v${disadvantagePlayers}`;
+        
+        // Verificar si ya existe una tarjeta para esta situación
+        const existingCard = document.querySelector(`.penalty-card[data-penalty-id="${situationId}"]`);
+        
+        if (existingCard) {
+          // Tarjeta ya existe, solo actualizar el texto numérico
+          const situationEl = existingCard.querySelector('.power-play-situation');
+          if (situationEl) {
+            situationEl.textContent = `${advantagePlayers}v${disadvantagePlayers}`;
+          }
+        } else {
+          // No existe tarjeta - eliminar cualquier tarjeta antigua y crear nueva
+          removeAllPowerPlayCards();
+          createPowerPlayCard(situationId, showOnRight, homeDefending, advantagePlayers, disadvantagePlayers, false);
+          
+          // Guardar referencia
+          activePenalties.set(situationId, {
+            intervalId: null,
+            showOnRight: showOnRight,
+            startTime: Date.now(),
+            situation: `${advantagePlayers}v${disadvantagePlayers}`,
+            emptyNet: false
+          });
+        }
+      }
     }
     
     /**
@@ -1372,16 +1366,16 @@
     }
     
     /**
-     * Crea una tarjeta visual de POWER PLAY (sin countdown)
+     * Crea una tarjeta visual de POWER PLAY única basada en situationCode
      */
-    function createPowerPlayCard(eventId, showOnRight, homeDefending, retryCount = 0) {
+    function createPowerPlayCard(situationId, showOnRight, homeDefending, advantagePlayers = 5, disadvantagePlayers = 4, isEmptyNet = false, retryCount = 0) {
       const teams = document.querySelectorAll('.main-score .team');
       
       if (teams.length !== 2) {
         if (retryCount < 3) {
           addLog(`⏳ DOM no listo, reintentando crear power play card (${retryCount + 1}/3)...`, 'info');
           setTimeout(() => {
-            createPowerPlayCard(eventId, showOnRight, homeDefending, retryCount + 1);
+            createPowerPlayCard(situationId, showOnRight, homeDefending, advantagePlayers, disadvantagePlayers, isEmptyNet, retryCount + 1);
           }, 500);
           return;
         } else {
@@ -1390,9 +1384,24 @@
         }
       }
       
-      const targetTeam = showOnRight ? teams[1] : teams[0];
+      // Determinar el orden real de los equipos en el DOM
+      // teams[0] = Equipo seguido (puede ser HOME o AWAY)
+      // teams[1] = Rival
+      const firstTeamBadge = teams[0].querySelector('.team-badge');
+      const firstTeamIsHome = firstTeamBadge && firstTeamBadge.textContent.trim() === 'HOME';
       
-      addLog(`📍 Creando tarjeta POWER PLAY en: ${showOnRight ? 'DERECHA' : 'IZQUIERDA'}`, 'info');
+      // Seleccionar el equipo correcto según posición NHL estándar
+      let targetTeam;
+      if (showOnRight) {
+        // Queremos HOME (derecha)
+        targetTeam = firstTeamIsHome ? teams[0] : teams[1];
+      } else {
+        // Queremos AWAY (izquierda)
+        targetTeam = firstTeamIsHome ? teams[1] : teams[0];
+      }
+      
+      const side = showOnRight ? 'DERECHA (HOME)' : 'IZQUIERDA (AWAY)';
+      addLog(`📍 Creando tarjeta POWER PLAY en: ${side} (firstTeamIsHome=${firstTeamIsHome})`, 'info');
       
       let penaltyContainer = targetTeam.querySelector('.penalty-container');
       
@@ -1416,11 +1425,16 @@
       
       const card = document.createElement('div');
       card.className = 'penalty-card';
-      card.setAttribute('data-penalty-id', eventId);
+      card.setAttribute('data-penalty-id', situationId);
+      
+      const borderColor = isEmptyNet ? '#f39c12' : '#2ecc71';
+      const bgGradient = isEmptyNet 
+        ? 'linear-gradient(135deg, rgba(243, 156, 18, 0.15), rgba(230, 126, 34, 0.15))'
+        : 'linear-gradient(135deg, rgba(46, 204, 113, 0.15), rgba(52, 211, 153, 0.15))';
       
       card.style.cssText = `
-        background: linear-gradient(135deg, rgba(46, 204, 113, 0.15), rgba(52, 211, 153, 0.15));
-        border-left: 3px solid #2ecc71;
+        background: ${bgGradient};
+        border-left: 3px solid ${borderColor};
         border-radius: 0.4rem;
         padding: 0.5rem 0.7rem;
         display: flex;
@@ -1433,18 +1447,18 @@
       
       card.innerHTML = `
         <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span style="font-size: 1.1rem;">⚡</span>
-          <span style="font-size: 0.8rem; font-weight: 600; color: #2ecc71;">POWER PLAY</span>
+          <span style="font-size: 1.1rem;">${isEmptyNet ? '🥅' : '⚡'}</span>
+          <span style="font-size: 0.8rem; font-weight: 600; color: ${isEmptyNet ? '#f39c12' : '#2ecc71'};">${isEmptyNet ? 'EMPTY NET' : 'POWER PLAY'}</span>
         </div>
-        <div style="
+        ${isEmptyNet ? '' : `<div style="
           font-size: 0.95rem;
           font-weight: 700;
           color: #fff;
           min-width: 2.5rem;
           text-align: right;
         " class="power-play-situation">
-          5v4
-        </div>
+          ${advantagePlayers}v${disadvantagePlayers}
+        </div>`}
       `;
       
       penaltyContainer.appendChild(card);
@@ -1478,18 +1492,7 @@
         document.head.appendChild(style);
       }
       
-      // Guardar referencia (sin intervalId porque no hay countdown)
-      if (!activePenalties.has(eventId)) {
-        activePenalties.set(eventId, {
-          intervalId: null,
-          showOnRight: showOnRight,
-          startTime: Date.now()
-        });
-        
-        addLog(`✅ Power Play card creada exitosamente - Event ${eventId}`, 'success');
-      } else {
-        addLog(`♻️ Power Play card re-creada - Event ${eventId}`, 'info');
-      }
+      addLog(`✅ Tarjeta creada: ${advantagePlayers}v${disadvantagePlayers} - ${side}`, 'success');
     }
     
     function formatPenaltyTime(seconds) {
@@ -1507,11 +1510,19 @@
     function restorePenaltyCards() {
       if (activePenalties.size === 0) return;
       
-      addLog(`♻️ Restaurando ${activePenalties.size} tarjeta(s) de POWER PLAY...`, 'info');
+      addLog(`♻️ Restaurando ${activePenalties.size} tarjeta(s)...`, 'info');
       
-      activePenalties.forEach((penalty, eventId) => {
-        // Re-crear la tarjeta sin countdown
-        createPowerPlayCard(eventId, penalty.showOnRight, null, 0);
+      activePenalties.forEach((penalty, situationId) => {
+        if (penalty.emptyNet) {
+          // Es EMPTY NET, no tiene números
+          createPowerPlayCard(situationId, penalty.showOnRight, null, 0, 0, true, 0);
+        } else {
+          // Es POWER PLAY, extraer situación del ID
+          const parts = situationId.split('_');
+          const situation = parts[2] || '5v4';
+          const [adv, disadv] = situation.split('v').map(n => parseInt(n) || 5);
+          createPowerPlayCard(situationId, penalty.showOnRight, null, adv, disadv, false, 0);
+        }
       });
     }
     
