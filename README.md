@@ -28,6 +28,9 @@ A beautiful, real-time NHL game tracking panel for Home Assistant that displays 
 ### Post-Game Status
 ![Post Game](screenshots/post-game.png)
 
+### Post-Game Status
+![Tablet View](screenshots/tablet-view.png)
+
 ## 🚀 Quick Start
 
 ### Prerequisites
