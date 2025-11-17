@@ -29,7 +29,7 @@ A beautiful, real-time NHL game tracking panel for Home Assistant that displays 
 ![Post Game](screenshots/post-game.png)
 
 ### Tablet view
-![Tablet View](screenshots/tablet-view.png)
+![Tablet View](screenshots/tablet-view.jpeg)
 
 ## 🚀 Quick Start
 
