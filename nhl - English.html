@@ -552,8 +552,8 @@
     // ═══════════════════════════════════════════════════════════════
     // CONFIGURATION - CHANGE THESE VALUES
     // ═══════════════════════════════════════════════════════════════
-    const HA_URL = 'http://HA_IP:8123';
-    const HA_TOKEN = 'TOKEN_HA';
+    const HA_URL = 'http://192.168.3.99:8123';
+    const HA_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2ZGJlMDZlZDM4ZDc0YTEzOGM0NmY1ODM0YTIzMTAyMCIsImlhdCI6MTc2MDczMjY2NSwiZXhwIjoyMDc2MDkyNjY1fQ.InsfaYwL-J_yzBIGqh6Cpwz34G99z8A-PtcQZvUcFkY';
     const INPUT_SELECT = 'input_select.nhl_team';
     
     // ═══════════════════════════════════════════════════════════════
@@ -1863,14 +1863,17 @@
       
       const attr = sensorData.attributes;
       
+      // Use team_abbr from sensor instead of input_select value
+      const teamAbbr = attr.team_abbr || teamNameFromHA;
+      
       const gameState = sensorData.state.toUpperCase(); 
       const live = gameState === 'IN';
       
       if (live) {
-        await processNHLData(teamNameFromHA, attr.team_homeaway);
+        await processNHLData(teamAbbr, attr.team_homeaway);
       } else if (gameState === 'PRE' || gameState === 'FUT') {
         if (!currentGameId) {
-          const gameInfo = await findGameId(teamNameFromHA);
+          const gameInfo = await findGameId(teamAbbr);
           if (gameInfo) {
             currentGameId = gameInfo.gameId;
             addLog(`🏒 Game found (PRE): ${currentGameId} - Waiting for start...`, 'info');
