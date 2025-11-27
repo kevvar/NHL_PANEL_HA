@@ -191,14 +191,15 @@
     .scores {
       display: flex;
       align-items: center;
-      gap: 2rem;
+      gap: 2.5rem;
       margin-bottom: 1.5rem;
     }
     
     .score {
-      font-size: 4.5rem;
+      font-size: 6rem;
       font-weight: 900;
       line-height: 1;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     .score.flip {
       display: inline-block;
@@ -216,8 +217,9 @@
     .score.loser { color: rgba(255, 255, 255, 0.4); }
     
     .score-separator {
-      font-size: 3rem;
-      color: rgba(255, 255, 255, 0.3);
+      font-size: 4rem;
+      color: rgba(255, 255, 255, 0.35);
+      font-weight: 300;
     }
     
     .status-badge {
@@ -247,7 +249,8 @@
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
     
     .period-info {
-      font-size: 1.2rem;
+      font-size: 1.6rem;
+      font-weight: 700;
       color: rgba(255, 255, 255, 0.6);
       margin-bottom: 1rem;
     }
@@ -411,21 +414,23 @@
     }
     
     .plays-timeline::-webkit-scrollbar {
-      width: 6px;
+      width: 10px;
     }
     
     .plays-timeline::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      margin: 4px 0;
     }
     
     .plays-timeline::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 5px;
+      min-height: 40px;
     }
     
-    .plays-timeline::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.3);
+    .plays-timeline::-webkit-scrollbar-thumb:active {
+      background: rgba(255, 255, 255, 0.45);
     }
     
     .play-card {
@@ -447,8 +452,6 @@
       transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
       border: 1px solid rgba(255,255,255,0.03);
     }
-
-    .play-card:hover { transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,0.45); }
 
     .play-card.short { align-items: center; text-align: center; }
     .play-card.short .play-content { display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -552,6 +555,7 @@
     // ═══════════════════════════════════════════════════════════════
     // CONFIGURACIÓN - CAMBIA ESTOS VALORES
     // ═══════════════════════════════════════════════════════════════
+   
     const HA_URL = 'http://HA_IP:8123';
     const HA_TOKEN = 'Token_HA';
     const INPUT_SELECT = 'input_select.equipo_nhl';
@@ -1221,15 +1225,63 @@
         const awayEmptyNet = awayGoalies === 0;
         const hasEmptyNet = homeEmptyNet || awayEmptyNet;
         
-        // Si hay empty net, mostrar tarjeta EMPTY NET
+        // Si hay empty net, verificar si es delayed penalty o empty net normal
         if (hasEmptyNet) {
           // El equipo SIN portero es donde se muestra la tarjeta
           const emptyNetTeam = homeEmptyNet ? 'home' : 'away';
           
-          // Determinar posición en EL PANEL
+          // Detectar delayed penalty: buscar penalty reciente (últimos 15 segundos)
+          const recentPenalties = playByPlayData.plays.filter(play => {
+            if (play.result?.eventTypeId !== 'PENALTY') return false;
+            
+            // Comparar con la última jugada (aproximación de tiempo actual)
+            const lastPlayIndex = playByPlayData.plays.length - 1;
+            const playIndex = playByPlayData.plays.indexOf(play);
+            
+            // Si el penalty está entre las últimas 5-10 jugadas, es reciente
+            return (lastPlayIndex - playIndex) <= 10;
+          });
+          
+          const isDelayedPenalty = recentPenalties.length > 0;
+          
+          if (isDelayedPenalty) {
+            // DELAYED PENALTY - Tarjeta especial amarilla
+            const penaltyPlay = recentPenalties[recentPenalties.length - 1];
+            const penalizedTeam = determineTeamFromEvent(penaltyPlay, playByPlayData);
+            const penaltyType = penaltyPlay.result?.penaltyMinutes ? `${penaltyPlay.result.penaltyMinutes} min` : '';
+            const penaltyReason = penaltyPlay.result?.secondaryType || 'Penalty';
+            
+            // Determinar posición en EL PANEL
+            const weAreHome = isHome;
+            const isOurEmptyNet = (weAreHome && homeEmptyNet) || (!weAreHome && awayEmptyNet);
+            const showOnRight = !isOurEmptyNet;
+            
+            const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
+            addLog(`⏸️ DELAYED PENALTY detectado - ${penalizedTeam?.toUpperCase()} será penalizado - ${side}`, 'info');
+            
+            const situationId = `situation_${emptyNetTeam}_DP`;
+            const existingCard = document.querySelector(`.penalty-card[data-penalty-id="${situationId}"]`);
+            
+            if (!existingCard) {
+              removeAllPowerPlayCards();
+              createDelayedPenaltyCard(situationId, showOnRight, homeDefending, penalizedTeam, penaltyType, penaltyReason);
+              
+              activePenalties.set(situationId, {
+                intervalId: null,
+                showOnRight: showOnRight,
+                startTime: Date.now(),
+                situation: 'DP',
+                delayedPenalty: true,
+                penalizedTeam: penalizedTeam
+              });
+            }
+            return;
+          }
+          
+          // EMPTY NET NORMAL - Tarjeta naranja actual
           const weAreHome = isHome;
           const isOurEmptyNet = (weAreHome && homeEmptyNet) || (!weAreHome && awayEmptyNet);
-          const showOnRight = !isOurEmptyNet; // Si NO es nuestro empty net, va a la derecha
+          const showOnRight = !isOurEmptyNet;
           
           const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
           addLog(`🥅 EMPTY NET detectado en ${emptyNetTeam.toUpperCase()} - ${side}`, 'info');
@@ -1425,27 +1477,28 @@
       
       card.style.cssText = `
         background: ${bgGradient};
-        border-left: 3px solid ${borderColor};
-        border-radius: 0.4rem;
-        padding: 0.5rem 0.7rem;
+        border-left: 5px solid ${borderColor};
+        border-radius: 0.6rem;
+        padding: 0.8rem 1rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
         backdrop-filter: blur(4px);
         animation: penaltySlideIn 0.3s ease-out;
         pointer-events: auto;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       `;
       
       card.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span style="font-size: 1.1rem;">${isEmptyNet ? '🥅' : '⚡'}</span>
-          <span style="font-size: 0.8rem; font-weight: 600; color: ${isEmptyNet ? '#f39c12' : '#2ecc71'};">${isEmptyNet ? 'EMPTY NET' : 'POWER PLAY'}</span>
+        <div style="display: flex; align-items: center; gap: 0.7rem;">
+          <span style="font-size: 1.6rem;">${isEmptyNet ? '🥅' : '⚡'}</span>
+          <span style="font-size: 1.1rem; font-weight: 700; color: ${isEmptyNet ? '#f39c12' : '#2ecc71'};">${isEmptyNet ? 'EMPTY NET' : 'POWER PLAY'}</span>
         </div>
         ${isEmptyNet ? '' : `<div style="
-          font-size: 0.95rem;
-          font-weight: 700;
+          font-size: 1.3rem;
+          font-weight: 800;
           color: #fff;
-          min-width: 2.5rem;
+          min-width: 3.5rem;
           text-align: right;
         " class="power-play-situation">
           ${advantagePlayers}v${disadvantagePlayers}
@@ -1486,6 +1539,112 @@
       addLog(`✅ Tarjeta creada: ${advantagePlayers}v${disadvantagePlayers} - ${side}`, 'success');
     }
     
+    /**
+     * Creates a DELAYED PENALTY card (yellow/amber color)
+     */
+    function createDelayedPenaltyCard(situationId, showOnRight, homeDefending, penalizedTeam, penaltyTime, penaltyReason, retryCount = 0) {
+      const teams = document.querySelectorAll('.main-score .team');
+      
+      if (teams.length !== 2) {
+        if (retryCount < 3) {
+          addLog(`⏳ DOM no listo, reintentando crear delayed penalty card (${retryCount + 1}/3)...`, 'info');
+          setTimeout(() => {
+            createDelayedPenaltyCard(situationId, showOnRight, homeDefending, penalizedTeam, penaltyTime, penaltyReason, retryCount + 1);
+          }, 500);
+          return;
+        } else {
+          addLog(`❌ Error: No se encontraron 2 equipos en el DOM después de 3 intentos`, 'error');
+          return;
+        }
+      }
+      
+      // teams[0] = Tu equipo (izquierda), teams[1] = Rival (derecha)
+      const targetTeam = showOnRight ? teams[1] : teams[0];
+      
+      const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
+      addLog(`📍 Creando tarjeta DELAYED PENALTY en: ${side}`, 'info');
+      
+      let penaltyContainer = targetTeam.querySelector('.penalty-container');
+      
+      if (!penaltyContainer) {
+        penaltyContainer = document.createElement('div');
+        penaltyContainer.className = 'penalty-container';
+        penaltyContainer.style.cssText = `
+          position: absolute;
+          bottom: 0;
+          ${showOnRight ? 'right: 0;' : 'left: 0;'}
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+          z-index: 10;
+          pointer-events: none;
+        `;
+        
+        targetTeam.style.position = 'relative';
+        targetTeam.appendChild(penaltyContainer);
+      }
+      
+      const card = document.createElement('div');
+      card.className = 'penalty-card delayed-penalty-card';
+      card.setAttribute('data-penalty-id', situationId);
+      
+      // Colores amarillo/ámbar para delayed penalty
+      const borderColor = '#f1c40f';
+      const bgGradient = 'linear-gradient(135deg, rgba(241, 196, 15, 0.2), rgba(243, 156, 18, 0.2))';
+      
+      card.style.cssText = `
+        background: ${bgGradient};
+        border-left: 5px solid ${borderColor};
+        border-radius: 0.6rem;
+        padding: 0.8rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        backdrop-filter: blur(4px);
+        animation: penaltySlideIn 0.3s ease-out, delayedPulse 2s ease-in-out infinite;
+        pointer-events: auto;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      `;
+      
+      const teamLabel = penalizedTeam === 'home' ? 'HOME' : (penalizedTeam === 'away' ? 'AWAY' : 'Equipo');
+      
+      card.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.7rem;">
+          <div style="display: flex; align-items: center; gap: 0.7rem;">
+            <span style="font-size: 1.6rem;">⏸️</span>
+            <span style="font-size: 1.1rem; font-weight: 700; color: #f1c40f;">PENALTY RETRASADO</span>
+          </div>
+        </div>
+        <div style="font-size: 0.95rem; color: rgba(255,255,255,0.9); margin-left: 2.3rem; font-weight: 600;">
+          ${teamLabel} será penalizado ${penaltyTime ? `(${penaltyTime})` : ''}
+        </div>
+        ${penaltyReason ? `<div style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-left: 2.3rem; font-style: italic;">
+          ${penaltyReason}
+        </div>` : ''}
+      `;
+      
+      penaltyContainer.appendChild(card);
+      
+      // Agregar animación de pulso para delayed penalty
+      if (!document.getElementById('delayedPenaltyAnimations')) {
+        const style = document.createElement('style');
+        style.id = 'delayedPenaltyAnimations';
+        style.textContent = `
+          @keyframes delayedPulse {
+            0%, 100% {
+              box-shadow: 0 4px 12px rgba(241, 196, 15, 0.4);
+            }
+            50% {
+              box-shadow: 0 6px 20px rgba(241, 196, 15, 0.7);
+            }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      addLog(`✅ Tarjeta DELAYED PENALTY creada - ${side}`, 'success');
+    }
+    
     function formatPenaltyTime(seconds) {
       if (seconds <= 0) return '0:00';
       
@@ -1504,7 +1663,10 @@
       addLog(`♻️ Restaurando ${activePenalties.size} tarjeta(s)...`, 'info');
       
       activePenalties.forEach((penalty, situationId) => {
-        if (penalty.emptyNet) {
+        if (penalty.delayedPenalty) {
+          // Es DELAYED PENALTY
+          createDelayedPenaltyCard(situationId, penalty.showOnRight, null, penalty.penalizedTeam, '', '', 0);
+        } else if (penalty.emptyNet) {
           // Es EMPTY NET, no tiene números
           createPowerPlayCard(situationId, penalty.showOnRight, null, 0, 0, true, 0);
         } else {
