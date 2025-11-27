@@ -110,7 +110,7 @@ A beautiful, real-time NHL game tracking panel for Home Assistant that displays 
        icon: mdi:hockey-puck
 
    input_select:
-     nhl_team:
+     nhl_team: #for english, for spanish use "equipo_nhl"
        name: NHL Team
        options:
          - "Winnipeg Jets"
