@@ -1,0 +1,2626 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NHL Game Panel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    
+    .container {
+      height: 100vh;
+      width: 100%;
+      background: linear-gradient(160deg, #0e0f13 0%, #14161c 60%, #0e0f13 100%);
+      color: white;
+      overflow: hidden;
+      position: relative;
+    }
+    .container::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: var(--league-bg, none);
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 70vmin;
+      opacity: var(--league-opacity, 0.05);
+      filter: grayscale(100%) contrast(110%);
+      pointer-events: none;
+    }
+    
+    .header {
+      background: rgba(0, 0, 0, 0.6);
+      padding: 0.8rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+    }
+    
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    
+    .league-logo { height: 2.2rem; display: none; }
+    
+    .event-info h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    
+    .event-info p {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .header-right { text-align: right; }
+    
+    .tv-network {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #ffffff;
+      margin-bottom: 0.25rem;
+      opacity: 0.85;
+    }
+    
+    .game-date {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .shots-header {
+      max-width: 1100px;
+      margin: 0 auto 1.25rem;
+      padding: 0 1.25rem;
+      width: 100%;
+    }
+
+    .shots-header .shots-bar-container {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 0.6rem;
+      padding: 0.65rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      border: 1px solid rgba(255,255,255,0.04);
+      backdrop-filter: blur(4px);
+    }
+
+    .shots-header .top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .shots-header .stat-label {
+      font-size: 0.82rem;
+      color: rgba(255, 255, 255, 0.78);
+      font-weight: 700;
+      letter-spacing: 0.6px;
+    }
+    
+    .shots-header .center-info {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .shots-header .stat-values {
+      display: flex;
+      gap: 0.75rem;
+      font-size: 1.05rem;
+      font-weight: 800;
+      align-items: center;
+    }
+    
+    .shots-header .stat-value {
+        font-size: 1.05rem;
+    }
+    .shots-header .stat-sep { color: rgba(255,255,255,0.35); font-weight:700 }
+
+    .shots-header .stat-values [data-tooltip] { position: relative; cursor: default }
+    .shots-header .stat-values [data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+      z-index: 30;
+    }
+    
+    /* Indicador de dominio compacto en la misma línea */
+    .dominance-row {
+      display: inline-flex;
+      align-items: center;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .dominance-badge {
+      padding: 0.2rem 0.5rem;
+      border-radius: 0.25rem;
+      background: linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,165,0,0.15));
+      border: 1.5px solid rgba(255,215,0,0.4);
+      color: #ffd700;
+      font-weight: 700;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+    
+    /* Estadísticas secundarias compactas */
+    .secondary-stats {
+      max-width: 1100px;
+      margin: 0 auto 1rem;
+      padding: 0 1.25rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem;
+    }
+    
+    .mini-stat {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 0.4rem;
+      padding: 0.5rem 0.7rem;
+      border: 1px solid rgba(255,255,255,0.03);
+      text-align: center;
+    }
+    
+    .mini-stat-label {
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.5);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      margin-bottom: 0.3rem;
+      text-transform: uppercase;
+    }
+    
+    .mini-stat-values {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+    
+    .mini-stat-bar {
+      height: 3px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 0.3rem;
+      display: flex;
+    }
+
+    .main-score {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 2rem;
+      padding: 0 2rem 0.5rem 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+      align-items: center;
+    }
+    
+    .team { text-align: center; }
+    
+    .team-logo {
+      width: 7rem;
+      height: 7rem;
+      margin: 0 auto 0.5rem;
+      filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.5));
+    }
+    
+    .team-name {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    
+    .team-abbr {
+      font-size: 1.1rem;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 0.4rem;
+    }
+    
+    .team-record {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 0.4rem;
+    }
+    
+    .team-badge {
+      display: inline-block;
+      padding: 0.3rem 0.8rem;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 0.5rem;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+    
+    .score-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .scores {
+      display: flex;
+      align-items: center;
+      gap: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .score {
+      font-size: 3.5rem;
+      font-weight: 900;
+      line-height: 1;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .score.flip {
+      display: inline-block;
+      perspective: 600px;
+      animation: flipNum 600ms ease-out;
+    }
+    @keyframes flipNum {
+      0% { transform: rotateX(0deg); }
+      40% { transform: rotateX(-90deg); opacity: 0.6; }
+      60% { transform: rotateX(-90deg); opacity: 0.6; }
+      100% { transform: rotateX(0deg); opacity: 1; }
+    }
+    
+    .score.winner { color: #2ecc71; }
+    .score.loser { color: rgba(255, 255, 255, 0.4); }
+    
+    .score-separator {
+      font-size: 4rem;
+      color: rgba(255, 255, 255, 0.35);
+      font-weight: 300;
+    }
+    
+    .status-badge {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .live-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .live-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ff3b30;
+      box-shadow: 0 0 12px rgba(255, 59, 48, 0.7);
+      animation: blink 1.2s ease-in-out infinite;
+    }
+    .live-text { font-weight: 800; color: #ff6b6b; letter-spacing: 0.5px; animation: blink 1.2s ease-in-out infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+    
+    .period-info {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 0.3rem;
+    }
+    .state-chips {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .state-chip {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.9);
+      font-weight: 600;
+      font-size: 0.8rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+    }
+    
+    .winner-badge {
+      background: rgba(46, 204, 113, 0.12);
+      border: 1px solid rgba(46, 204, 113, 0.5);
+      padding: 0.4rem 1.1rem;
+      border-radius: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    
+    .winner-text {
+      color: #2ecc71;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    
+    .container.goal-flash::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 8px;
+      padding: 10px;
+      box-sizing: border-box;
+      pointer-events: none;
+      background: linear-gradient(90deg, var(--goal-primary, #2ecc71), var(--goal-secondary, #a6f4c5));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      box-shadow: inset 0 0 50px rgba(var(--goal-color-rgb, 46, 204, 113), 0.45), 0 0 50px rgba(var(--goal-color-rgb, 46, 204, 113), 0.45);
+      animation: pulseBorder 5.0s ease-out 3;
+    }
+    @keyframes pulseBorder {
+      0% { opacity: 0; }
+      30% { opacity: 1; }
+      60% { opacity: 0.7; }
+      100% { opacity: 0; }
+    }
+    
+    .game-details-grid {
+      display: grid;
+      grid-template-columns: 1fr; 
+      gap: 0;
+      padding: 0.5rem 1.25rem 1rem 1.25rem; 
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    
+    .stat-card {
+      display: none; 
+    }
+    
+    .last-play-section {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 0.6rem;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      flex-direction: column;
+      max-height: 140px;
+    }
+    
+    .last-play-title {
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+    }
+    
+    .plays-timeline {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+      padding-right: 0.5rem;
+    }
+    
+    .shots-bar {
+      margin-top: 0.4rem;
+      height: 12px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+      border-radius: 999px;
+      overflow: hidden;
+      display: flex;
+      border: 1px solid rgba(0,0,0,0.25);
+      position: relative;
+    }
+    .shots-bar .team { background: linear-gradient(90deg, var(--team-primary), rgba(0,0,0,0.02)); box-shadow: inset 0 -6px 12px rgba(0,0,0,0.12); }
+    .shots-bar .opp { background: linear-gradient(90deg, var(--opponent-primary), rgba(0,0,0,0.02)); opacity: 0.95 }
+
+    .shots-bar::before {
+      content: '';
+      position: absolute;
+      height: 12px;
+      width: 100%;
+      border-radius: 999px;
+      pointer-events: none;
+      background-image: linear-gradient(90deg, rgba(255,255,255,0.02) 0.25rem, transparent 0.25rem);
+      background-size: 1rem 100%;
+      opacity: 0.25;
+    }
+
+    .shots-bar.pulse .team, .shots-bar.pulse .opp { animation: shotsPulse 900ms ease-out 1 }
+    @keyframes shotsPulse { 0% { transform: translateY(0) } 50% { transform: translateY(-1px) scaleY(1.02) } 100% { transform: translateY(0) } }
+    
+    .last-play-section {
+      padding: 0; 
+      width: 100%;
+    }
+    
+    .footer {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 1rem 3rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .footer-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .refresh-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.25);
+      color: white;
+      padding: 0.25rem 0.6rem;
+      border-radius: 0.4rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-left: 0.5rem;
+    }
+    .refresh-btn:hover { background: rgba(255,255,255,0.08); }
+    
+    .footer-info span {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.9rem;
+      margin-right: 0.5rem;
+    }
+    
+    .footer-info strong {
+      color: white;
+      font-weight: 600;
+    }
+    
+    .last-update {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .last-play-title {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+    
+    .plays-timeline {
+      max-height: 220px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+      padding-right: 0.5rem;
+    }
+    
+    .plays-timeline::-webkit-scrollbar {
+      width: 10px;
+    }
+    
+    .plays-timeline::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      margin: 4px 0;
+    }
+    
+    .plays-timeline::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 5px;
+      min-height: 40px;
+    }
+    
+    .plays-timeline::-webkit-scrollbar-thumb:active {
+      background: rgba(255, 255, 255, 0.45);
+    }
+    
+    .play-card {
+      display: flex;
+      flex-direction: row;
+      gap: 0.5rem;
+      align-items: center;
+      min-height: 42px;
+      justify-content: center;
+      text-align: left;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+      border-radius: 0.4rem;
+      padding: 0.3rem 0.5rem;
+      margin-bottom: 0.3rem;
+      font-size: 0.85rem;
+      line-height: 1.15;
+      color: white;
+      animation: slideIn 0.24s ease-out;
+      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .play-card.short { align-items: center; text-align: center; }
+    .play-card.short .play-content { display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .play-card.short .play-time { order: 0; margin-top: 0; }
+    .play-card.short .play-text { -webkit-line-clamp: 2; line-clamp: 2; }
+
+    .play-content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .play-time { color: rgba(255,255,255,0.85); font-size: 0.75rem; margin-bottom: 0.05rem; font-weight: 700; text-align: center; }
+    .play-text { font-size: 0.85rem; color: #fff; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-clamp: 2; overflow-wrap: anywhere; text-align: center; }
+    .play-card.expanded .play-text { -webkit-line-clamp: unset; line-clamp: unset; white-space: normal; }
+
+    .play-card.new { background: rgba(255,255,255,0.06); animation: newPlayPulse 1s ease-out; border-color: rgba(255,255,255,0.07) }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    @keyframes newPlayPulse {
+      0%, 100% { background: rgba(255, 255, 255, 0.12); }
+      50% { background: rgba(255, 255, 255, 0.24); }
+    }
+    
+    .play-time {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.8rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .touch-tooltip {
+      position: fixed;
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      padding: 0.35rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      z-index: 200;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 160ms ease;
+    }
+    
+    .last-play-empty {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.4);
+      font-style: italic;
+    }
+    
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      height: 100vh;
+      font-size: 1.5rem;
+      gap: 1rem;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    @media (min-width: 768px) and (max-width: 1400px) {
+      .main-score { gap: 2rem; padding: 0 1.25rem 1.75rem 1.25rem; }
+      .team-logo { width: 9.5rem; height: 9.5rem; }
+      .team-name { font-size: 2.05rem; }
+      .score { font-size: 4.6rem; }
+      
+      .game-details-grid { padding: 0 1.25rem 1.5rem 1.25rem; }
+
+      .shots-header { padding: 0 1rem; margin-bottom: 1rem; }
+      .plays-timeline { max-height: 360px; }
+      .footer { padding: 1rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="container"></div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════════
+    // CONFIGURACIÓN - CAMBIA ESTOS VALORES
+    // ═══════════════════════════════════════════════════════════════
+   
+    const HA_URL = 'http://HA_IP:8123';
+    const HA_TOKEN = 'Token_HA';
+    const INPUT_SELECT = 'input_select.equipo_nhl';
+    
+    // ═══════════════════════════════════════════════════════════════
+    // NUEVA FUNCIÓN: Llamar a NHL API a través de rest_command de HA
+    // ═══════════════════════════════════════════════════════════════
+    /**
+     * Llama a la NHL API leyendo los sensores REST de Home Assistant
+     * Los sensores se actualizan automáticamente cada X segundos
+     */
+    async function callNHLApiViaHA(nhlApiUrl) {
+      try {
+        // Determinar qué sensor leer según la URL
+        let sensorEntity = '';
+        
+        if (nhlApiUrl.includes('/schedule/now')) {
+          sensorEntity = 'sensor.nhl_schedule_now';
+          addLog(`📡 Leyendo sensor: ${sensorEntity}`, 'info');
+        } else if (nhlApiUrl.includes('/play-by-play')) {
+          sensorEntity = 'sensor.nhl_play_by_play';
+          addLog(`📡 Leyendo sensor: ${sensorEntity}`, 'info');
+        } else {
+          throw new Error('URL no soportada en sensores');
+        }
+        
+        // Leer el sensor de HA
+        const response = await fetch(`${HA_URL}/api/states/${sensorEntity}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${HA_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const sensorData = await response.json();
+        
+        // Los datos de la API están en los atributos del sensor
+        const apiData = sensorData.attributes || {};
+        
+        // Validar que tenemos datos
+        if (Object.keys(apiData).length === 0) {
+          throw new Error('Sensor sin datos - esperando primera actualización');
+        }
+        
+        addLog(`✅ Datos leídos del sensor (${Object.keys(apiData).length} atributos)`, 'success');
+        
+        return apiData;
+      } catch (error) {
+        addLog(`❌ Error leyendo sensor: ${error.message}`, 'error');
+        console.error('Error reading HA sensor:', error);
+        throw error;
+      }
+    }
+    
+    /**
+     * Actualiza el input_text con el game ID actual
+     * Y activa/desactiva el flag de juego activo
+     */
+    async function updateGameIdInHA(gameId, isActive = true) {
+      try {
+        // Actualizar game ID
+        const response1 = await fetch(`${HA_URL}/api/services/input_text/set_value`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${HA_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            entity_id: 'input_text.nhl_current_game_id',
+            value: gameId || ''
+          })
+        });
+        
+        if (!response1.ok) {
+          throw new Error(`HTTP ${response1.status}`);
+        }
+        
+        // Activar/desactivar flag de juego activo
+        const booleanService = isActive ? 'turn_on' : 'turn_off';
+        const response2 = await fetch(`${HA_URL}/api/services/input_boolean/${booleanService}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${HA_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            entity_id: 'input_boolean.nhl_game_active'
+          })
+        });
+        
+        if (!response2.ok) {
+          throw new Error(`HTTP ${response2.status}`);
+        }
+        
+        addLog(`✅ Game ID: ${gameId || 'vacío'} | Activo: ${isActive}`, 'success');
+        
+        // Esperar 2 segundos para que el sensor se actualice
+        await delay(2000);
+        
+      } catch (error) {
+        addLog(`⚠️ Error actualizando game ID: ${error.message}`, 'warning');
+        console.error('Error updating game ID:', error);
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // VARIABLES GLOBALES
+    // ═══════════════════════════════════════════════════════════════
+    let currentSensor = null;
+    let playsHistory = [];
+    let lastScore = { team: 0, opponent: 0 };
+    let isFirstLoad = true;
+    
+    let currentGameId = null;
+    let currentTeamName = null;
+    let processedGoalEvents = new Set();
+    let pendingGoalEvents = new Map();
+    let lastProcessedEventId = 0;
+    let skipNextGoalProcessing = false;
+    let activePenalties = new Map();
+    let processedPenalties = new Set();
+    
+    // Stats extraídas del play-by-play
+    let gameStats = {
+      faceoffTeam: 0,
+      faceoffOpp: 0,
+      hitsTeam: 0,
+      hitsOpp: 0,
+      blocksTeam: 0,
+      blocksOpp: 0
+    };
+    
+    // ═══════════════════════════════════════════════════════════════
+    // PERSISTENCIA DE GOLES
+    // ═══════════════════════════════════════════════════════════════
+    function loadProcessedGoals() {
+      try {
+        const stored = localStorage.getItem('nhl_processed_goals');
+        if (stored) {
+          const data = JSON.parse(stored);
+          const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+          const validGoals = data.filter(item => item.timestamp > oneDayAgo);
+          
+          processedGoalEvents = new Set(validGoals.map(item => item.eventId));
+          saveProcessedGoals();
+          
+          if (processedGoalEvents.size > 0) {
+            addLog(`🔥 ${processedGoalEvents.size} gol(es) ya procesado(s) cargados`, 'info');
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando goles procesados:', error);
+        processedGoalEvents = new Set();
+      }
+    }
+    
+    function saveProcessedGoals() {
+      try {
+        const data = Array.from(processedGoalEvents).map(eventId => ({
+          eventId: eventId,
+          timestamp: Date.now()
+        }));
+        localStorage.setItem('nhl_processed_goals', JSON.stringify(data));
+      } catch (error) {
+        console.error('Error guardando goles procesados:', error);
+      }
+    }
+    
+    function clearOldProcessedGoals() {
+      try {
+        localStorage.removeItem('nhl_processed_goals');
+        processedGoalEvents.clear();
+        pendingGoalEvents.clear();
+        skipNextGoalProcessing = true;
+        
+        clearAllPenalties(true);
+        
+        addLog('🗑️ Goles limpiados - penaltis reiniciados', 'warning');
+      } catch (error) {
+        console.error('Error limpiando goles:', error);
+      }
+    }
+    
+    function clearAllPenalties(keepProcessedHistory = false) {
+      activePenalties.forEach((penalty, eventId) => {
+        if (penalty.intervalId) {
+          clearInterval(penalty.intervalId);
+        }
+      });
+      
+      activePenalties.clear();
+      
+      if (!keepProcessedHistory) {
+        processedPenalties.clear();
+      }
+      
+      const allPenaltyContainers = document.querySelectorAll('.penalty-container');
+      allPenaltyContainers.forEach(container => container.remove());
+      
+      addLog(`🧹 Penaltis activos limpiados${keepProcessedHistory ? ' (historial preservado)' : ''}`, 'info');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // LOGGING SYSTEM
+    // ═══════════════════════════════════════════════════════════════
+    let logMessages = [];
+    const MAX_LOG_MESSAGES = 15;
+    
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    function addLog(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString('es-ES', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'America/Costa_Rica'
+      });
+      
+      logMessages.unshift({
+        time: timestamp,
+        message: message,
+        type: type
+      });
+      
+      if (logMessages.length > MAX_LOG_MESSAGES) {
+        logMessages = logMessages.slice(0, MAX_LOG_MESSAGES);
+      }
+      
+      updateLogPanel();
+      console.log(`[NHL Debug ${timestamp}]`, message);
+    }
+    
+    function updateLogPanel() {
+      let logPanel = document.getElementById('nhlDebugLog');
+      
+      if (!logPanel) {
+        logPanel = document.createElement('div');
+        logPanel.id = 'nhlDebugLog';
+        logPanel.style.cssText = `
+          position: fixed;
+          top: 10px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 400px;
+          max-height: 400px;
+          background: rgba(0, 0, 0, 0.92);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 8px;
+          padding: 10px;
+          font-family: 'Courier New', monospace;
+          font-size: 11px;
+          color: #fff;
+          overflow-y: auto;
+          z-index: 9999;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(10px);
+          transition: all 0.3s ease;
+        `;
+        
+        const header = document.createElement('div');
+        header.style.cssText = `
+          font-weight: bold;
+          margin-bottom: 8px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        `;
+        header.innerHTML = `
+          <span>🏒 NHL API Debug Log</span>
+          <div>
+            <button id="clearLogBtn" style="
+              background: rgba(255, 59, 48, 0.8);
+              border: none;
+              color: white;
+              padding: 2px 8px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 10px;
+            ">Limpiar</button>
+            <button id="clearGoalsBtn" style="
+              background: rgba(255, 165, 0, 0.8);
+              border: none;
+              color: white;
+              padding: 2px 8px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 10px;
+              margin-left: 4px;
+            " title="Limpiar goles guardados">🗑️</button>
+            <button id="toggleLogBtn" style="
+              background: rgba(100, 100, 100, 0.8);
+              border: none;
+              color: white;
+              padding: 2px 8px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 10px;
+              margin-left: 4px;
+            " title="Minimizar/Maximizar">−</button>
+          </div>
+        `;
+        
+        logPanel.appendChild(header);
+        
+        const messagesContainer = document.createElement('div');
+        messagesContainer.id = 'logMessages';
+        logPanel.appendChild(messagesContainer);
+        
+        document.body.appendChild(logPanel);
+        
+        document.getElementById('clearLogBtn').addEventListener('click', () => {
+          logMessages = [];
+          updateLogPanel();
+        });
+        
+        document.getElementById('clearGoalsBtn').addEventListener('click', () => {
+          clearOldProcessedGoals();
+        });
+        
+        let isMinimized = false;
+        document.getElementById('toggleLogBtn').addEventListener('click', (e) => {
+          const btn = e.target;
+          const messages = document.getElementById('logMessages');
+          
+          if (isMinimized) {
+            logPanel.style.maxHeight = '400px';
+            messages.style.display = 'block';
+            btn.textContent = '−';
+            btn.title = 'Minimizar';
+            isMinimized = false;
+          } else {
+            logPanel.style.maxHeight = '45px';
+            messages.style.display = 'none';
+            btn.textContent = '+';
+            btn.title = 'Maximizar';
+            isMinimized = true;
+          }
+        });
+      }
+      
+      const messagesContainer = document.getElementById('logMessages');
+      if (!messagesContainer) return;
+      
+      const typeColors = {
+        info: '#00bfff',
+        success: '#00ff88',
+        warning: '#ffaa00',
+        error: '#ff3b30'
+      };
+      
+      messagesContainer.innerHTML = logMessages.map(log => `
+        <div style="
+          margin-bottom: 6px;
+          padding: 4px;
+          background: rgba(255, 255, 255, 0.03);
+          border-radius: 4px;
+          border-left: 3px solid ${typeColors[log.type] || typeColors.info};
+        ">
+          <span style="color: rgba(255, 255, 255, 0.5); font-size: 10px;">${log.time}</span><br>
+          <span style="color: ${typeColors[log.type] || typeColors.info};">${log.message}</span>
+        </div>
+      `).join('');
+      
+      logPanel.style.setProperty('scrollbar-width', 'thin');
+      logPanel.style.setProperty('scrollbar-color', 'rgba(255,255,255,0.3) rgba(0,0,0,0.3)');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // NHL API FUNCTIONS - AHORA USA HOME ASSISTANT
+    // ═══════════════════════════════════════════════════════════════
+    
+    async function findGameId(teamName) {
+      try {
+        addLog(`Buscando game ID para: ${teamName}`, 'info');
+        
+        const url = `https://api-web.nhle.com/v1/schedule/now`;
+        const data = await callNHLApiViaHA(url);
+        
+        if (!data.gameWeek || !Array.isArray(data.gameWeek)) {
+          addLog('No hay gameWeek en schedule', 'warning');
+          return null;
+        }
+        
+        // Preparar búsqueda flexible
+        const searchTerms = teamName.toLowerCase().trim();
+        
+        // Extraer palabras clave (ignorar palabras cortas como "de", "los", "las")
+        const keywords = searchTerms
+          .split(' ')
+          .filter(word => word.length > 3 && !['the'].includes(word));
+        
+        for (const week of data.gameWeek) {
+          if (!week.games || !Array.isArray(week.games)) continue;
+          
+          for (const game of week.games) {
+            const homeTeam = game.homeTeam;
+            const awayTeam = game.awayTeam;
+            
+            // Construir nombres completos
+            const homeFullName = (homeTeam?.placeName?.default || '') + ' ' + (homeTeam?.commonName?.default || '');
+            const awayFullName = (awayTeam?.placeName?.default || '') + ' ' + (awayTeam?.commonName?.default || '');
+            const homeAbbrev = homeTeam?.abbrev || '';
+            const awayAbbrev = awayTeam?.abbrev || '';
+            
+            // Método 1: Comparación exacta de abreviatura (más confiable)
+            if (homeAbbrev.toUpperCase() === teamName.toUpperCase() ||
+                awayAbbrev.toUpperCase() === teamName.toUpperCase()) {
+              
+              const isHome = homeAbbrev.toUpperCase() === teamName.toUpperCase();
+              addLog(`✔ Game encontrado por ABBREV: ${game.id} (${isHome ? 'HOME' : 'AWAY'}) - Estado: ${game.gameState}`, 'success');
+              
+              return {
+                gameId: game.id,
+                isHome: isHome,
+                gameState: game.gameState
+              };
+            }
+            
+            // Método 2: Comparación exacta de nombre completo
+            if (homeFullName.toLowerCase() === searchTerms ||
+                awayFullName.toLowerCase() === searchTerms) {
+              
+              const isHome = homeFullName.toLowerCase() === searchTerms;
+              addLog(`✔ Game encontrado por NOMBRE EXACTO: ${game.id} (${isHome ? 'HOME' : 'AWAY'}) - Estado: ${game.gameState}`, 'success');
+              
+              return {
+                gameId: game.id,
+                isHome: isHome,
+                gameState: game.gameState
+              };
+            }
+            
+            // Método 3: Búsqueda flexible por palabras clave
+            const homeMatches = keywords.every(keyword => 
+              homeFullName.toLowerCase().includes(keyword)
+            );
+            const awayMatches = keywords.every(keyword => 
+              awayFullName.toLowerCase().includes(keyword)
+            );
+            
+            if (homeMatches || awayMatches) {
+              const isHome = homeMatches;
+              addLog(`✔ Game encontrado por KEYWORDS: ${game.id} (${isHome ? 'HOME' : 'AWAY'}) - Estado: ${game.gameState}`, 'success');
+              addLog(`   Búsqueda: "${teamName}" → Match: "${isHome ? homeFullName : awayFullName}"`, 'info');
+              
+              return {
+                gameId: game.id,
+                isHome: isHome,
+                gameState: game.gameState
+              };
+            }
+          }
+        }
+        
+        addLog(`No se encontró juego para: ${teamName}`, 'warning');
+        addLog(`💡 Tip: Intenta usar la abreviatura del equipo (ej: VGK, WPG, TOR)`, 'info');
+        return null;
+      } catch (error) {
+        addLog(`Error buscando game ID: ${error.message}`, 'error');
+        console.error('Error finding game ID:', error);
+        return null;
+      }
+    }
+    
+    async function fetchPlayByPlay(gameId) {
+      try {
+        const url = `https://api-web.nhle.com/v1/gamecenter/${gameId}/play-by-play`;
+        const data = await callNHLApiViaHA(url);
+        
+        addLog(`✔ Play-by-play obtenido (${data.plays?.length || 0} eventos)`, 'success');
+        return data;
+      } catch (error) {
+        addLog(`Error en fetchPlayByPlay: ${error.message}`, 'error');
+        console.error('Error fetching play-by-play:', error);
+        return null;
+      }
+    }
+    
+    async function sendTelegramNotification(message, teamName = '') {
+      try {
+        const response = await fetch(`${HA_URL}/api/services/telegram_bot/send_message`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${HA_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: message,
+            config_entry_id: 'INTEGRATION_ID',
+            target: ['CHAT_ID'],
+          })
+        });
+        
+        if (!response.ok) {
+          addLog(`Error enviando notificación: HTTP ${response.status}`, 'error');
+        }
+      } catch (error) {
+        addLog(`Error enviando notificación: ${error.message}`, 'error');
+        console.error('Error enviando notificación:', error);
+      }
+    }
+    
+    /**
+     * Extrae estadísticas del juego desde el play-by-play
+     */
+    function extractGameStats(playByPlayData, isHome) {
+      if (!playByPlayData?.plays) return null;
+      
+      let faceoffTeam = 0, faceoffOpp = 0;
+      let hitsTeam = 0, hitsOpp = 0;
+      let blocksTeam = 0, blocksOpp = 0;
+      
+      const homeTeamId = playByPlayData.homeTeam?.id;
+      const awayTeamId = playByPlayData.awayTeam?.id;
+      const ourTeamId = isHome ? homeTeamId : awayTeamId;
+      const oppTeamId = isHome ? awayTeamId : homeTeamId;
+      
+      playByPlayData.plays.forEach(play => {
+        const eventTeamId = play.details?.eventOwnerTeamId;
+        
+        if (play.typeDescKey === 'faceoff') {
+          if (eventTeamId === ourTeamId) faceoffTeam++;
+          else if (eventTeamId === oppTeamId) faceoffOpp++;
+        }
+        else if (play.typeDescKey === 'hit') {
+          if (eventTeamId === ourTeamId) hitsTeam++;
+          else if (eventTeamId === oppTeamId) hitsOpp++;
+        }
+        else if (play.typeDescKey === 'blocked-shot') {
+          if (eventTeamId === ourTeamId) blocksTeam++;
+          else if (eventTeamId === oppTeamId) blocksOpp++;
+        }
+      });
+      
+      return { faceoffTeam, faceoffOpp, hitsTeam, hitsOpp, blocksTeam, blocksOpp };
+    }
+    
+    async function processGoalEvents(playByPlayData, gameId, teamName = '') {
+      if (!playByPlayData?.plays) return;
+      
+      if (skipNextGoalProcessing) {
+        const plays = playByPlayData.plays;
+        for (const play of plays) {
+          if (play.typeDescKey === 'goal' && play.details?.highlightClipSharingUrl) {
+            processedGoalEvents.add(play.eventId);
+          }
+        }
+        saveProcessedGoals();
+        skipNextGoalProcessing = false;
+        addLog(`✔ ${processedGoalEvents.size} gol(es) existentes marcados (sin reenviar)`, 'info');
+        return;
+      }
+      
+      const plays = playByPlayData.plays;
+      let newGoalsDetected = 0;
+      let urlsFound = 0;
+      
+      for (const play of plays) {
+        if (play.typeDescKey !== 'goal') continue;
+        
+        const eventId = play.eventId;
+        
+        if (processedGoalEvents.has(eventId)) continue;
+        
+        const urlEn = play.details?.highlightClipSharingUrl || '';
+        const urlFr = play.details?.highlightClipSharingUrlFr || '';
+        
+        const isCompleteUrl = (url) => url && url !== 'https://nhl.com/video/' && url.length > 30;
+        
+        const hasValidUrl = isCompleteUrl(urlEn) || isCompleteUrl(urlFr);
+        
+        if (hasValidUrl) {
+          if (pendingGoalEvents.has(eventId)) {
+            const pending = pendingGoalEvents.get(eventId);
+            addLog(`✔ URL de gol encontrada después de ${pending.attempts} intentos (Event ${eventId})`, 'success');
+            pendingGoalEvents.delete(eventId);
+          }
+          
+          let finalUrl = '';
+          if (isCompleteUrl(urlEn)) {
+            finalUrl = urlEn;
+            addLog(`🔗 Usando URL EN: ${urlEn.substring(0, 50)}...`, 'info');
+          } else if (isCompleteUrl(urlFr)) {
+            finalUrl = urlFr;
+            addLog(`🔗 Usando URL FR (fallback): ${urlFr.substring(0, 50)}...`, 'warning');
+          }
+          
+          const time = play.timeInPeriod || '';
+          const period = play.periodDescriptor?.number || '';
+          
+          await sendTelegramNotification(
+            `🚨 ¡GOL! Período ${period} - ${time}\n${finalUrl}`,
+            teamName
+          );
+          
+          addLog(`📱 Notificación enviada: Gol P${period} ${time}`, 'success');
+          
+          processedGoalEvents.add(eventId);
+          urlsFound++;
+          
+          saveProcessedGoals();
+        } else {
+          if (!pendingGoalEvents.has(eventId)) {
+            const time = play.timeInPeriod || '';
+            const period = play.periodDescriptor?.number || '';
+            
+            pendingGoalEvents.set(eventId, {
+              eventData: play,
+              attempts: 1,
+              firstSeen: Date.now(),
+              period: period,
+              time: time
+            });
+            
+            addLog(`🎯 Nuevo gol detectado (Event ${eventId}) P${period} ${time} - Esperando URL...`, 'warning');
+            newGoalsDetected++;
+          } else {
+            const pending = pendingGoalEvents.get(eventId);
+            pending.attempts++;
+            pendingGoalEvents.set(eventId, pending);
+            
+            if (pending.attempts % 5 === 0) {
+              const waitTime = Math.round((Date.now() - pending.firstSeen) / 1000);
+              addLog(`⏳ Esperando URL (Event ${eventId}) - Intento ${pending.attempts} (${waitTime}s)`, 'info');
+            }
+          }
+        }
+      }
+      
+      if (newGoalsDetected > 0 || urlsFound > 0 || pendingGoalEvents.size > 0) {
+        const summary = [];
+        if (newGoalsDetected > 0) summary.push(`${newGoalsDetected} nuevo(s)`);
+        if (urlsFound > 0) summary.push(`${urlsFound} URL encontrada(s)`);
+        if (pendingGoalEvents.size > 0) summary.push(`${pendingGoalEvents.size} pendiente(s)`);
+        
+        addLog(`📊 Goles: ${summary.join(', ')}`, 'info');
+      }
+    }
+    
+    /**
+     * Procesa penaltis y los marca como procesados
+     * ACTUALIZADO: Ya NO crea tarjetas, solo registra los eventos
+     */
+    function processPenalties(playByPlayData, isHome) {
+      if (!playByPlayData?.plays) return;
+      
+      const plays = playByPlayData.plays;
+      let newPenaltiesDetected = 0;
+      let skippedPenalties = 0;
+      
+      for (const play of plays) {
+        if (play.typeDescKey !== 'penalty') continue;
+        
+        const eventId = play.eventId;
+        
+        if (processedPenalties.has(eventId)) {
+          skippedPenalties++;
+          continue;
+        }
+        
+        const duration = play.details?.duration || 2;
+        const teamSide = determineTeamFromEvent(play, playByPlayData);
+        if (teamSide === null) continue;
+        
+        const isPenaltyOnHome = (teamSide === 'home');
+        const powerPlayTeam = isPenaltyOnHome ? 'away' : 'home';
+        
+        processedPenalties.add(eventId);
+        newPenaltiesDetected++;
+        
+        addLog(`⚠️ Penalty detectado: ${teamSide.toUpperCase()} (${duration} min) - Event ${eventId}`, 'warning');
+      }
+      
+      // SIEMPRE revisar situationCode para actualizar tarjetas
+      checkPowerPlayStatus(playByPlayData, isHome);
+      
+      if (newPenaltiesDetected > 0 || skippedPenalties > 0) {
+        addLog(`📊 Penalties: ${newPenaltiesDetected} nuevo(s), ${skippedPenalties} ya procesado(s)`, 'info');
+      }
+    }
+    
+    /**
+     * Revisa el situationCode actual y gestiona la tarjeta de power play única
+     * REFACTORIZADO: Ahora crea/actualiza UNA SOLA tarjeta basándose 100% en situationCode
+     */
+    function checkPowerPlayStatus(playByPlayData, isHome) {
+      if (!playByPlayData?.plays || playByPlayData.plays.length === 0) return;
+      
+      // Obtener el último play para revisar situationCode
+      const latestPlay = playByPlayData.plays[playByPlayData.plays.length - 1];
+      const currentSituation = latestPlay?.situationCode || "1551";
+      const homeDefending = latestPlay?.homeTeamDefendingSide;
+      
+      // Parsear situationCode (formato: "1451" = AWAY: 1G 4P, HOME: 5P 1G)
+      if (currentSituation.length === 4) {
+        const awayGoalies = parseInt(currentSituation[0]);
+        const awayPlayers = parseInt(currentSituation[1]);
+        const homePlayers = parseInt(currentSituation[2]);
+        const homeGoalies = parseInt(currentSituation[3]);
+        
+        // Detectar empty net (portero = 0)
+        const homeEmptyNet = homeGoalies === 0;
+        const awayEmptyNet = awayGoalies === 0;
+        const hasEmptyNet = homeEmptyNet || awayEmptyNet;
+        
+        // Si hay empty net, verificar si es delayed penalty o empty net normal
+        if (hasEmptyNet) {
+          // El equipo SIN portero es donde se muestra la tarjeta
+          const emptyNetTeam = homeEmptyNet ? 'home' : 'away';
+          
+          // Detectar delayed penalty: buscar penalty reciente (últimos 15 segundos)
+          const recentPenalties = playByPlayData.plays.filter(play => {
+            if (play.result?.eventTypeId !== 'PENALTY') return false;
+            
+            // Comparar con la última jugada (aproximación de tiempo actual)
+            const lastPlayIndex = playByPlayData.plays.length - 1;
+            const playIndex = playByPlayData.plays.indexOf(play);
+            
+            // Si el penalty está entre las últimas 5-10 jugadas, es reciente
+            return (lastPlayIndex - playIndex) <= 10;
+          });
+          
+          const isDelayedPenalty = recentPenalties.length > 0;
+          
+          if (isDelayedPenalty) {
+            // DELAYED PENALTY - Tarjeta especial amarilla
+            const penaltyPlay = recentPenalties[recentPenalties.length - 1];
+            const penalizedTeam = determineTeamFromEvent(penaltyPlay, playByPlayData);
+            const penaltyType = penaltyPlay.result?.penaltyMinutes ? `${penaltyPlay.result.penaltyMinutes} min` : '';
+            const penaltyReason = penaltyPlay.result?.secondaryType || 'Penalty';
+            
+            // Determinar posición en EL PANEL
+            const weAreHome = isHome;
+            const isOurEmptyNet = (weAreHome && homeEmptyNet) || (!weAreHome && awayEmptyNet);
+            const showOnRight = !isOurEmptyNet;
+            
+            const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
+            addLog(`⏸️ DELAYED PENALTY detectado - ${penalizedTeam?.toUpperCase()} será penalizado - ${side}`, 'info');
+            
+            const situationId = `situation_${emptyNetTeam}_DP`;
+            const existingCard = document.querySelector(`.penalty-card[data-penalty-id="${situationId}"]`);
+            
+            if (!existingCard) {
+              removeAllPowerPlayCards();
+              createDelayedPenaltyCard(situationId, showOnRight, homeDefending, penalizedTeam, penaltyType, penaltyReason);
+              
+              activePenalties.set(situationId, {
+                intervalId: null,
+                showOnRight: showOnRight,
+                startTime: Date.now(),
+                situation: 'DP',
+                delayedPenalty: true,
+                penalizedTeam: penalizedTeam
+              });
+            }
+            return;
+          }
+          
+          // EMPTY NET NORMAL - Tarjeta naranja actual
+          const weAreHome = isHome;
+          const isOurEmptyNet = (weAreHome && homeEmptyNet) || (!weAreHome && awayEmptyNet);
+          const showOnRight = !isOurEmptyNet;
+          
+          const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
+          addLog(`🥅 EMPTY NET detectado en ${emptyNetTeam.toUpperCase()} - ${side}`, 'info');
+          
+          const situationId = `situation_${emptyNetTeam}_EN`;
+          const existingCard = document.querySelector(`.penalty-card[data-penalty-id="${situationId}"]`);
+          
+          if (!existingCard) {
+            removeAllPowerPlayCards();
+            createPowerPlayCard(situationId, showOnRight, homeDefending, 0, 0, true);
+            
+            activePenalties.set(situationId, {
+              intervalId: null,
+              showOnRight: showOnRight,
+              startTime: Date.now(),
+              situation: 'EN',
+              emptyNet: true
+            });
+          }
+          return;
+        }
+        
+        // Detectar si hay ventaja numérica (power play)
+        const hasPowerPlay = homePlayers !== awayPlayers;
+        
+        if (!hasPowerPlay) {
+          // Juego parejo (5v5, 4v4, 3v3, etc.) - eliminar todas las tarjetas
+          if (activePenalties.size > 0) {
+            addLog(`✅ Juego parejo - Situación: ${currentSituation} (${homePlayers}v${awayPlayers})`, 'success');
+            removeAllPowerPlayCards();
+          }
+          return;
+        }
+        
+        // HAY power play - determinar quién tiene ventaja
+        let powerPlayTeam, advantagePlayers, disadvantagePlayers;
+        
+        if (homePlayers > awayPlayers) {
+          // HOME tiene MÁS jugadores = HOME tiene VENTAJA (AWAY tiene penalty)
+          powerPlayTeam = 'home';
+          advantagePlayers = homePlayers;
+          disadvantagePlayers = awayPlayers;
+        } else {
+          // AWAY tiene MÁS jugadores = AWAY tiene VENTAJA (HOME tiene penalty)
+          powerPlayTeam = 'away';
+          advantagePlayers = awayPlayers;
+          disadvantagePlayers = homePlayers;
+        }
+        
+        // Determinar posición en EL PANEL (no según estándar NHL)
+        // teams[0] = Tu equipo (izquierda), teams[1] = Rival (derecha)
+        // La tarjeta va donde ESTÉ el equipo con ventaja en TU panel
+        const weAreHome = isHome;
+        const weHaveAdvantage = (weAreHome && powerPlayTeam === 'home') || (!weAreHome && powerPlayTeam === 'away');
+        const showOnRight = !weHaveAdvantage; // Si NO es nuestro, va a la derecha (rival)
+        
+        const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
+        const penalizedTeam = powerPlayTeam === 'home' ? 'AWAY' : 'HOME';
+        
+        // DEBUG COMPLETO
+        addLog(`🔍 DEBUG situationCode: ${currentSituation}`, 'debug');
+        addLog(`🔍 DEBUG parsed: AWAY=${awayGoalies}G ${awayPlayers}P vs HOME=${homeGoalies}G ${homePlayers}P`, 'debug');
+        addLog(`🔍 DEBUG powerPlayTeam="${powerPlayTeam}" (quien TIENE ventaja)`, 'debug');
+        addLog(`🔍 DEBUG penalizedTeam="${penalizedTeam}" (quien COMETIÓ penalty)`, 'debug');
+        addLog(`🔍 DEBUG weAreHome=${weAreHome}, weHaveAdvantage=${weHaveAdvantage}`, 'debug');
+        addLog(`🔍 DEBUG showOnRight=${showOnRight} (${side})`, 'debug');
+        
+        addLog(`⚡ PP: ${powerPlayTeam.toUpperCase()} tiene ventaja (${penalizedTeam} penalizado) ${advantagePlayers}v${disadvantagePlayers} - ${weHaveAdvantage ? 'NUESTRO' : 'RIVAL'} - ${side}`, 'info');
+        
+        // Crear ID único para esta situación
+        const situationId = `situation_${powerPlayTeam}_${advantagePlayers}v${disadvantagePlayers}`;
+        
+        // Verificar si ya existe una tarjeta para esta situación
+        const existingCard = document.querySelector(`.penalty-card[data-penalty-id="${situationId}"]`);
+        
+        if (existingCard) {
+          // Tarjeta ya existe, solo actualizar el texto numérico
+          const situationEl = existingCard.querySelector('.power-play-situation');
+          if (situationEl) {
+            situationEl.textContent = `${advantagePlayers}v${disadvantagePlayers}`;
+          }
+        } else {
+          // No existe tarjeta - eliminar cualquier tarjeta antigua y crear nueva
+          removeAllPowerPlayCards();
+          createPowerPlayCard(situationId, showOnRight, homeDefending, advantagePlayers, disadvantagePlayers, false);
+          
+          // Guardar referencia
+          activePenalties.set(situationId, {
+            intervalId: null,
+            showOnRight: showOnRight,
+            startTime: Date.now(),
+            situation: `${advantagePlayers}v${disadvantagePlayers}`,
+            emptyNet: false
+          });
+        }
+      }
+    }
+    
+    /**
+     * Elimina todas las tarjetas de power play activas
+     */
+    function removeAllPowerPlayCards() {
+      activePenalties.forEach((penalty, eventId) => {
+        if (penalty.intervalId) {
+          clearInterval(penalty.intervalId);
+        }
+        
+        const cards = document.querySelectorAll(`.penalty-card[data-penalty-id="${eventId}"]`);
+        cards.forEach(card => {
+          card.style.animation = 'penaltySlideOut 0.3s ease-out';
+          setTimeout(() => {
+            card.remove();
+            
+            const container = card.closest('.penalty-container');
+            if (container && container.children.length === 0) {
+              container.remove();
+            }
+          }, 300);
+        });
+      });
+      
+      activePenalties.clear();
+      addLog(`🧹 Todas las tarjetas de Power Play eliminadas`, 'info');
+    }
+    
+    function determineTeamFromEvent(play, playByPlayData) {
+      if (!play.details?.eventOwnerTeamId) return null;
+      
+      const penaltyTeamId = play.details.eventOwnerTeamId;
+      
+      const homeTeamId = playByPlayData.homeTeam?.id;
+      const awayTeamId = playByPlayData.awayTeam?.id;
+      
+      if (penaltyTeamId === homeTeamId) return 'home';
+      if (penaltyTeamId === awayTeamId) return 'away';
+      
+      return null;
+    }
+    
+    /**
+     * Crea una tarjeta visual de POWER PLAY única basada en situationCode
+     */
+    function createPowerPlayCard(situationId, showOnRight, homeDefending, advantagePlayers = 5, disadvantagePlayers = 4, isEmptyNet = false, retryCount = 0) {
+      const teams = document.querySelectorAll('.main-score .team');
+      
+      if (teams.length !== 2) {
+        if (retryCount < 3) {
+          addLog(`⏳ DOM no listo, reintentando crear power play card (${retryCount + 1}/3)...`, 'info');
+          setTimeout(() => {
+            createPowerPlayCard(situationId, showOnRight, homeDefending, advantagePlayers, disadvantagePlayers, isEmptyNet, retryCount + 1);
+          }, 500);
+          return;
+        } else {
+          addLog(`❌ Error: No se encontraron 2 equipos en el DOM después de 3 intentos`, 'error');
+          return;
+        }
+      }
+      
+      // teams[0] = Tu equipo (izquierda), teams[1] = Rival (derecha)
+      const targetTeam = showOnRight ? teams[1] : teams[0];
+      
+      const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
+      addLog(`📍 Creando tarjeta en: ${side}`, 'info');
+      
+      let penaltyContainer = targetTeam.querySelector('.penalty-container');
+      
+      if (!penaltyContainer) {
+        penaltyContainer = document.createElement('div');
+        penaltyContainer.className = 'penalty-container';
+        penaltyContainer.style.cssText = `
+          position: absolute;
+          bottom: 0;
+          ${showOnRight ? 'right: 0;' : 'left: 0;'}
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+          z-index: 10;
+          pointer-events: none;
+        `;
+        
+        targetTeam.style.position = 'relative';
+        targetTeam.appendChild(penaltyContainer);
+      }
+      
+      const card = document.createElement('div');
+      card.className = 'penalty-card';
+      card.setAttribute('data-penalty-id', situationId);
+      
+      const borderColor = isEmptyNet ? '#f39c12' : '#2ecc71';
+      const bgGradient = isEmptyNet 
+        ? 'linear-gradient(135deg, rgba(243, 156, 18, 0.15), rgba(230, 126, 34, 0.15))'
+        : 'linear-gradient(135deg, rgba(46, 204, 113, 0.15), rgba(52, 211, 153, 0.15))';
+      
+      card.style.cssText = `
+        background: ${bgGradient};
+        border-left: 5px solid ${borderColor};
+        border-radius: 0.6rem;
+        padding: 0.8rem 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        backdrop-filter: blur(4px);
+        animation: penaltySlideIn 0.3s ease-out;
+        pointer-events: auto;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      `;
+      
+      card.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.7rem;">
+          <span style="font-size: 1.6rem;">${isEmptyNet ? '🥅' : '⚡'}</span>
+          <span style="font-size: 1.1rem; font-weight: 700; color: ${isEmptyNet ? '#f39c12' : '#2ecc71'};">${isEmptyNet ? 'EMPTY NET' : 'POWER PLAY'}</span>
+        </div>
+        ${isEmptyNet ? '' : `<div style="
+          font-size: 1.3rem;
+          font-weight: 800;
+          color: #fff;
+          min-width: 3.5rem;
+          text-align: right;
+        " class="power-play-situation">
+          ${advantagePlayers}v${disadvantagePlayers}
+        </div>`}
+      `;
+      
+      penaltyContainer.appendChild(card);
+      
+      if (!document.getElementById('penaltyAnimations')) {
+        const style = document.createElement('style');
+        style.id = 'penaltyAnimations';
+        style.textContent = `
+          @keyframes penaltySlideIn {
+            from {
+              opacity: 0;
+              transform: translateX(${showOnRight ? '' : '-'}20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0);
+            }
+          }
+          
+          @keyframes penaltySlideOut {
+            from {
+              opacity: 1;
+              transform: translateX(0) scale(1);
+            }
+            to {
+              opacity: 0;
+              transform: translateX(${showOnRight ? '' : '-'}20px) scale(0.9);
+            }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      addLog(`✅ Tarjeta creada: ${advantagePlayers}v${disadvantagePlayers} - ${side}`, 'success');
+    }
+    
+    /**
+     * Creates a DELAYED PENALTY card (yellow/amber color)
+     */
+    function createDelayedPenaltyCard(situationId, showOnRight, homeDefending, penalizedTeam, penaltyTime, penaltyReason, retryCount = 0) {
+      const teams = document.querySelectorAll('.main-score .team');
+      
+      if (teams.length !== 2) {
+        if (retryCount < 3) {
+          addLog(`⏳ DOM no listo, reintentando crear delayed penalty card (${retryCount + 1}/3)...`, 'info');
+          setTimeout(() => {
+            createDelayedPenaltyCard(situationId, showOnRight, homeDefending, penalizedTeam, penaltyTime, penaltyReason, retryCount + 1);
+          }, 500);
+          return;
+        } else {
+          addLog(`❌ Error: No se encontraron 2 equipos en el DOM después de 3 intentos`, 'error');
+          return;
+        }
+      }
+      
+      // teams[0] = Tu equipo (izquierda), teams[1] = Rival (derecha)
+      const targetTeam = showOnRight ? teams[1] : teams[0];
+      
+      const side = showOnRight ? 'DERECHA (RIVAL)' : 'IZQUIERDA (NOSOTROS)';
+      addLog(`📍 Creando tarjeta DELAYED PENALTY en: ${side}`, 'info');
+      
+      let penaltyContainer = targetTeam.querySelector('.penalty-container');
+      
+      if (!penaltyContainer) {
+        penaltyContainer = document.createElement('div');
+        penaltyContainer.className = 'penalty-container';
+        penaltyContainer.style.cssText = `
+          position: absolute;
+          bottom: 0;
+          ${showOnRight ? 'right: 0;' : 'left: 0;'}
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+          z-index: 10;
+          pointer-events: none;
+        `;
+        
+        targetTeam.style.position = 'relative';
+        targetTeam.appendChild(penaltyContainer);
+      }
+      
+      const card = document.createElement('div');
+      card.className = 'penalty-card delayed-penalty-card';
+      card.setAttribute('data-penalty-id', situationId);
+      
+      // Colores amarillo/ámbar para delayed penalty
+      const borderColor = '#f1c40f';
+      const bgGradient = 'linear-gradient(135deg, rgba(241, 196, 15, 0.2), rgba(243, 156, 18, 0.2))';
+      
+      card.style.cssText = `
+        background: ${bgGradient};
+        border-left: 5px solid ${borderColor};
+        border-radius: 0.6rem;
+        padding: 0.8rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        backdrop-filter: blur(4px);
+        animation: penaltySlideIn 0.3s ease-out, delayedPulse 2s ease-in-out infinite;
+        pointer-events: auto;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      `;
+      
+      const teamLabel = penalizedTeam === 'home' ? 'HOME' : (penalizedTeam === 'away' ? 'AWAY' : 'Equipo');
+      
+      card.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.7rem;">
+          <div style="display: flex; align-items: center; gap: 0.7rem;">
+            <span style="font-size: 1.6rem;">⏸️</span>
+            <span style="font-size: 1.1rem; font-weight: 700; color: #f1c40f;">PENALTY RETRASADO</span>
+          </div>
+        </div>
+        <div style="font-size: 0.95rem; color: rgba(255,255,255,0.9); margin-left: 2.3rem; font-weight: 600;">
+          ${teamLabel} será penalizado ${penaltyTime ? `(${penaltyTime})` : ''}
+        </div>
+        ${penaltyReason ? `<div style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-left: 2.3rem; font-style: italic;">
+          ${penaltyReason}
+        </div>` : ''}
+      `;
+      
+      penaltyContainer.appendChild(card);
+      
+      // Agregar animación de pulso para delayed penalty
+      if (!document.getElementById('delayedPenaltyAnimations')) {
+        const style = document.createElement('style');
+        style.id = 'delayedPenaltyAnimations';
+        style.textContent = `
+          @keyframes delayedPulse {
+            0%, 100% {
+              box-shadow: 0 4px 12px rgba(241, 196, 15, 0.4);
+            }
+            50% {
+              box-shadow: 0 6px 20px rgba(241, 196, 15, 0.7);
+            }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      addLog(`✅ Tarjeta DELAYED PENALTY creada - ${side}`, 'success');
+    }
+    
+    function formatPenaltyTime(seconds) {
+      if (seconds <= 0) return '0:00';
+      
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    /**
+     * Restaura las tarjetas de POWER PLAY activas después de re-renderizar el HTML
+     * Se llama después de updatePanel() para recuperar las tarjetas visuales
+     */
+    function restorePenaltyCards() {
+      if (activePenalties.size === 0) return;
+      
+      addLog(`♻️ Restaurando ${activePenalties.size} tarjeta(s)...`, 'info');
+      
+      activePenalties.forEach((penalty, situationId) => {
+        if (penalty.delayedPenalty) {
+          // Es DELAYED PENALTY
+          createDelayedPenaltyCard(situationId, penalty.showOnRight, null, penalty.penalizedTeam, '', '', 0);
+        } else if (penalty.emptyNet) {
+          // Es EMPTY NET, no tiene números
+          createPowerPlayCard(situationId, penalty.showOnRight, null, 0, 0, true, 0);
+        } else {
+          // Es POWER PLAY, extraer situación del ID
+          const parts = situationId.split('_');
+          const situation = parts[2] || '5v4';
+          const [adv, disadv] = situation.split('v').map(n => parseInt(n) || 5);
+          createPowerPlayCard(situationId, penalty.showOnRight, null, adv, disadv, false, 0);
+        }
+      });
+    }
+    
+    async function processNHLData(teamName, teamHomeAway = 'home') {
+      if (currentTeamName && currentTeamName !== teamName) {
+        addLog(`🔄 Cambio de equipo detectado: ${currentTeamName} → ${teamName}`, 'warning');
+        currentGameId = null;
+        currentTeamName = teamName;
+        processedGoalEvents.clear();
+        pendingGoalEvents.clear();
+        clearAllPenalties(false);
+      }
+      
+      if (!currentGameId) {
+        currentTeamName = teamName;
+        
+        const gameInfo = await findGameId(teamName);
+        if (gameInfo) {
+          currentGameId = gameInfo.gameId;
+          addLog(`🏒 Iniciando monitoreo del juego ${currentGameId}`, 'success');
+          
+          // IMPORTANTE: Actualizar el input_text en HA y activar flag
+          await updateGameIdInHA(currentGameId, true);
+          
+          clearAllPenalties(false);
+        } else {
+          addLog(`❌ No se encontró juego activo para ${teamName}`, 'error');
+          return;
+        }
+      }
+      
+      await delay(500);
+      
+      const playByPlayData = await fetchPlayByPlay(currentGameId);
+      if (!playByPlayData) {
+        addLog(`❌ Error obteniendo play-by-play para game ${currentGameId}`, 'error');
+        currentGameId = null;
+        return;
+      }
+      
+      // Normalizar teamHomeAway a lowercase
+      const isHome = (teamHomeAway || 'home').toLowerCase() === 'home';
+      
+      // Extraer estadísticas del juego
+      const stats = extractGameStats(playByPlayData, isHome);
+      if (stats) {
+        gameStats = stats;
+        addLog(`📊 Stats actualizadas - Faceoffs: ${stats.faceoffTeam}:${stats.faceoffOpp} | Hits: ${stats.hitsTeam}:${stats.hitsOpp} | Blocks: ${stats.blocksTeam}:${stats.blocksOpp}`, 'info');
+      }
+      
+      processPenalties(playByPlayData, isHome);
+      
+      await processGoalEvents(playByPlayData, currentGameId, teamName);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // HOME ASSISTANT DATA FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════
+    
+    async function fetchHAData(entityId) {
+      try {
+        const response = await fetch(`${HA_URL}/api/states/${entityId}`, {
+          headers: {
+            'Authorization': `Bearer ${HA_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) throw new Error('Error fetching data');
+        return await response.json();
+      } catch (error) {
+        console.error('Error:', error);
+        return null;
+      }
+    }
+    
+    function formatDate(dateStr) {
+      if (!dateStr) return 'TBD';
+      try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('es-ES', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric',
+          timeZone: 'America/Costa_Rica'
+        });
+      } catch (e) {
+        return dateStr;
+      }
+    }
+    
+    function formatTime(timeStr) {
+      if (!timeStr) return new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Costa_Rica' });
+      try {
+        const date = new Date(timeStr);
+        return date.toLocaleTimeString('es-ES', { 
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'America/Costa_Rica'
+        });
+      } catch (e) {
+        return timeStr;
+      }
+    }
+    
+    function convertClockTimeZone(clockStr) {
+      if (!clockStr) return clockStr;
+      
+      try {
+        // Detectar EST o EDT en la cadena
+        const matchEST = clockStr.match(/(\d{1,2})\/(\d{1,2})\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)\s*(EST|EDT)/i);
+        
+        if (!matchEST) return clockStr; // Si no coincide, devolver original
+        
+        const month = parseInt(matchEST[1]);
+        let day = parseInt(matchEST[2]);
+        const hour = parseInt(matchEST[3]);
+        const minute = parseInt(matchEST[4]);
+        const period = matchEST[5].toUpperCase();
+        const timezone = matchEST[6].toUpperCase();
+        
+        // Convertir a formato 24h
+        let hour24 = hour;
+        if (period === 'PM' && hour !== 12) hour24 += 12;
+        if (period === 'AM' && hour === 12) hour24 = 0;
+        
+        // Calcular diferencia horaria
+        // EST = GMT-5, Tu zona = GMT-6 → Diferencia: -1 hora (60 minutos)
+        // EDT = GMT-4, Tu zona = GMT-6 → Diferencia: -2 horas (120 minutos)
+        const offsetMinutes = (timezone === 'EDT') ? 120 : 60;
+        
+        let totalMinutes = hour24 * 60 + minute;
+        totalMinutes -= offsetMinutes; // Restar diferencia
+        
+        // Manejar cambio de día
+        let newMonth = month;
+        if (totalMinutes < 0) {
+          totalMinutes += 1440; // Sumar 24 horas
+          day -= 1;
+          if (day < 1) {
+            // Día anterior del mes anterior
+            day = 31; // Simplificación (funciona para la mayoría de casos)
+            newMonth -= 1;
+            if (newMonth < 1) newMonth = 12;
+          }
+        } else if (totalMinutes >= 1440) {
+          totalMinutes -= 1440;
+          day += 1;
+          // Aquí podrías validar días del mes, pero para simplicidad...
+        }
+        
+        // Convertir de vuelta a 12h
+        const newHour24 = Math.floor(totalMinutes / 60);
+        const newMinute = totalMinutes % 60;
+        
+        const newPeriod = newHour24 < 12 ? 'AM' : 'PM';
+        const newHour12 = newHour24 % 12 || 12;
+        
+        const minuteStr = String(newMinute).padStart(2, '0');
+        return `${newMonth}/${day} - ${newHour12}:${minuteStr} ${newPeriod}`;
+      } catch (e) {
+        console.error('Error convirtiendo zona horaria:', e);
+        return clockStr;
+      }
+    }
+    
+    function hexToRgb(hex) {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex || ''));
+      return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '255, 255, 255';
+    }
+    
+    function applyTeamColors(attr) {
+      const appEl = document.getElementById('app');
+      const leagueBg = (attr.league_logo && typeof attr.league_logo === 'string') ? `url('${attr.league_logo}')` : 'none';
+      appEl && appEl.style.setProperty('--league-bg', leagueBg);
+      let color1 = '#2ecc71';
+      let color2 = '#ffffff';
+      if (attr.team_colors) {
+        const parts = String(attr.team_colors).split(',');
+        if (parts.length >= 1 && /^#/.test(parts[0].trim())) color1 = parts[0].trim();
+        if (parts.length >= 2 && /^#/.test(parts[1].trim())) color2 = parts[1].trim();
+      }
+      document.documentElement.style.setProperty('--team-primary', color1);
+      document.documentElement.style.setProperty('--team-secondary', color2);
+      document.documentElement.style.setProperty('--team-primary-rgb', hexToRgb(color1));
+      let opp1 = '#c41230';
+      let opp2 = '#ffffff';
+      if (attr.opponent_colors) {
+        const op = String(attr.opponent_colors).split(',');
+        if (op.length >= 1 && /^#/.test(op[0].trim())) opp1 = op[0].trim();
+        if (op.length >= 2 && /^#/.test(op[1].trim())) opp2 = op[1].trim();
+      }
+      document.documentElement.style.setProperty('--opponent-primary', opp1);
+      document.documentElement.style.setProperty('--opponent-secondary', opp2);
+      document.documentElement.style.setProperty('--opponent-primary-rgb', hexToRgb(opp1));
+    }
+    
+    function checkForGoal(attr) {
+      const currentScoreTeam = attr.team_score || 0;
+      const currentScoreOpponent = attr.opponent_score || 0;
+      
+      if (!isFirstLoad) {
+        let scorer = null;
+        if (currentScoreTeam > lastScore.team) scorer = 'team';
+        if (currentScoreOpponent > lastScore.opponent) scorer = 'opponent';
+        if (scorer) {
+          triggerGoalAnimation(scorer);
+        }
+      }
+      
+      lastScore = {
+        team: currentScoreTeam,
+        opponent: currentScoreOpponent
+      };
+      isFirstLoad = false;
+    }
+    
+    function triggerGoalAnimation(whoScored) {
+      const container = document.getElementById('app');
+      const goalPrimary = whoScored === 'opponent' ? getComputedStyle(document.documentElement).getPropertyValue('--opponent-primary').trim() : getComputedStyle(document.documentElement).getPropertyValue('--team-primary').trim();
+      const goalSecondary = whoScored === 'opponent' ? getComputedStyle(document.documentElement).getPropertyValue('--opponent-secondary').trim() : getComputedStyle(document.documentElement).getPropertyValue('--team-secondary').trim();
+      const goalRgb = whoScored === 'opponent' ? getComputedStyle(document.documentElement).getPropertyValue('--opponent-primary-rgb').trim() : getComputedStyle(document.documentElement).getPropertyValue('--team-primary-rgb').trim();
+      container.style.setProperty('--goal-primary', goalPrimary || '#2ecc71');
+      container.style.setProperty('--goal-secondary', goalSecondary || '#a6f4c5');
+      container.style.setProperty('--goal-color-rgb', goalRgb || '46, 204, 113');
+      container.style.setProperty('--goal-color', goalPrimary || '#2ecc71');
+      container.classList.add('goal-flash');
+      
+      setTimeout(() => {
+        container.classList.remove('goal-flash');
+      }, 2000);
+    }
+    
+    function addPlayToHistory(lastPlay, clock) {
+      if (!lastPlay || lastPlay.trim() === '') return;
+      
+      const playWithTime = {
+        text: lastPlay,
+        time: convertClockTimeZone(clock) || 'Live',
+        timestamp: Date.now()
+      };
+      
+      if (playsHistory.length === 0 || playsHistory[0].text !== lastPlay) {
+        playsHistory.unshift(playWithTime);
+        playsHistory = playsHistory.slice(0, 10);
+          if (!window._newPlaysCount) window._newPlaysCount = 0;
+          window._newPlaysCount += 1;
+          const newBadge = document.getElementById('newPlaysBadge');
+          if (newBadge && userScrolledAway) {
+            newBadge.innerText = `NUEVAS (${window._newPlaysCount})`;
+            newBadge.style.display = 'block';
+          }
+          updatePlaysTimeline(true);
+      }
+    }
+    
+    let userScrolledAway = false;
+    function updatePlaysTimeline(isNew = false, statusMsg = '') {
+      const timeline = document.getElementById('playsTimeline');
+      if (!timeline) return;
+
+      if (playsHistory.length === 0) {
+        const msg = statusMsg || 'Waiting for game action...';
+        timeline.innerHTML = `<div class="last-play-empty">${msg}</div>`;
+        return;
+      }
+
+      timeline.innerHTML = playsHistory.map((play, index) => {
+        const text = String(play.text || '');
+        const textLower = text.toLowerCase();
+        const newClass = (index === 0 && isNew) ? ' new' : '';
+        const isShort = text.trim().length > 0 && text.trim().length <= 30;
+        const shortClass = isShort ? ' short' : '';
+
+        return `
+          <div class="play-card${newClass}${shortClass}">
+            <div class="play-content">
+              <div class="play-time">${play.time}</div>
+              <div class="play-text">${play.text}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      if (isNew && !userScrolledAway) {
+        timeline.scrollTop = 0;
+      }
+
+      if (!timeline._scrollBound) {
+        timeline.addEventListener('scroll', () => {
+          userScrolledAway = timeline.scrollTop > 10;
+          const newBadge = document.getElementById('newPlaysBadge');
+          if (!userScrolledAway) {
+            if (window._newPlaysCount) window._newPlaysCount = 0;
+            if (newBadge) newBadge.style.display = 'none';
+          } else {
+            if (newBadge && window._newPlaysCount) {
+              newBadge.innerText = `NUEVAS (${window._newPlaysCount})`;
+              newBadge.style.display = 'block';
+            }
+          }
+        });
+        timeline._scrollBound = true;
+      }
+    }
+    
+    let refreshIntervalMs = 30000;
+    let refreshTimer = null;
+    function setRefreshInterval(ms) {
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshIntervalMs = ms;
+      refreshTimer = setInterval(updatePanel, refreshIntervalMs);
+    }
+
+    let pendingScoreFlip = null;
+    function manualRefresh() {
+      updatePanel(true);
+      setRefreshInterval(refreshIntervalMs);
+    }
+
+    async function updatePanel(force = false) {
+      const app = document.getElementById('app');
+      
+      const inputData = await fetchHAData(INPUT_SELECT);
+      if (!inputData) {
+        app.innerHTML = `
+          <div class="loading">
+            <div class="spinner"></div>
+            <div>Conectando con Home Assistant...</div>
+            <div style="font-size: 0.9rem; color: rgba(255,255,255,0.5);">Verifica URL y TOKEN</div>
+          </div>
+        `;
+        return;
+      }
+      
+      const teamNameFromHA = inputData.attributes?.friendly_name || inputData.state;
+      
+      const equipoNombre = inputData.state.replace(/ /g, '_').toLowerCase();
+      const sensorName = `sensor.${equipoNombre}`;
+      
+      const sensorData = await fetchHAData(sensorName);
+      if (!sensorData) {
+        app.innerHTML = `
+          <div class="loading">
+            <div class="spinner"></div>
+            <div>Esperando datos del sensor...</div>
+            <div style="font-size: 0.9rem; color: rgba(255,255,255,0.5);">${sensorName}</div>
+          </div>
+        `;
+        return;
+      }
+      
+      const attr = sensorData.attributes;
+      
+      const gameState = sensorData.state.toUpperCase(); 
+      const live = gameState === 'IN';
+      
+      if (live) {
+        await processNHLData(teamNameFromHA, attr.team_homeaway);
+      } else if (gameState === 'PRE' || gameState === 'FUT') {
+        if (!currentGameId) {
+          const gameInfo = await findGameId(teamNameFromHA);
+          if (gameInfo) {
+            currentGameId = gameInfo.gameId;
+            addLog(`🏒 Juego encontrado (PRE): ${currentGameId} - Esperando inicio...`, 'info');
+            // NO activar el flag aún, solo guardar el ID
+            await updateGameIdInHA(currentGameId, false);
+          }
+        }
+      } else {
+        if (currentGameId) {
+          addLog(`✅ Juego ${currentGameId} terminó - Limpiando datos`, 'info');
+          clearOldProcessedGoals();
+          currentGameId = null;
+          
+          // Limpiar el game ID en HA y desactivar flag
+          await updateGameIdInHA('', false);
+        }
+        pendingGoalEvents.clear();
+      }
+      
+      applyTeamColors(attr);
+      
+      const prevTeam = lastScore.team;
+      const prevOpp = lastScore.opponent;
+      checkForGoal(attr);
+      if (!isFirstLoad) {
+        if ((attr.team_score || 0) > prevTeam) pendingScoreFlip = 'team';
+        if ((attr.opponent_score || 0) > prevOpp) pendingScoreFlip = 'opponent';
+      }
+      
+      let desired;
+      if (live) {
+        desired = 15000;
+      } else if (gameState === 'PRE' || gameState === 'FUT') {
+        desired = 120000;
+      } else {
+        desired = 300000;
+      }
+      
+      if (desired !== refreshIntervalMs) {
+        setRefreshInterval(desired);
+        const intervalText = desired === 15000 ? '15s' : desired === 120000 ? '2min' : '5min';
+        addLog(`⏱️ Intervalo ajustado: ${intervalText} (Estado: ${gameState})`, 'info');
+      }
+      
+      if (live) {
+        addPlayToHistory(attr.last_play, attr.clock);
+      } else {
+        if (playsHistory.length > 0) {
+          playsHistory = [];
+        }
+      }
+      
+      const teamHA = (attr.team_homeaway || '').toLowerCase() === 'home' ? 'LOCAL' : 'VISITANTE';
+      const oppHA = (attr.opponent_homeaway || '').toLowerCase() === 'home' ? 'LOCAL' : 'VISITANTE';
+      
+      let periodLabel;
+      if (gameState === 'POST') {
+        periodLabel = convertClockTimeZone(attr.clock) || 'Finalizado';
+      } else if (gameState === 'PRE') {
+        periodLabel = 'Juego por iniciar';
+      } else {
+        periodLabel = `Período ${attr.quarter || '1'}`;
+      }
+
+      let shotsHtml = '';
+      let dominanceHtml = '';
+      let secondaryStatsHtml = '';
+      
+      const sotTeam = (attr.team_shots_on_target != null) ? Number(attr.team_shots_on_target) : null;
+      const sotOpp = (attr.opponent_shots_on_target != null) ? Number(attr.opponent_shots_on_target) : null;
+      const totTeam = (attr.team_total_shots != null) ? Number(attr.team_total_shots) : null;
+      const totOpp = (attr.opponent_total_shots != null) ? Number(attr.opponent_total_shots) : null;
+      const useTarget = (sotTeam != null && sotOpp != null);
+      const shotsTeam = useTarget ? sotTeam : totTeam;
+      const shotsOpp = useTarget ? sotOpp : totOpp;
+      const hasShots = (shotsTeam != null && shotsOpp != null);
+
+      if (hasShots) {
+          const total = Math.max(1, shotsTeam + shotsOpp);
+          const pctTeam = Math.round((shotsTeam / total) * 100);
+          const pctOpp = 100 - pctTeam;
+          
+          // Calcular indicador de dominio usando stats del play-by-play
+          const faceoffTeam = gameStats.faceoffTeam || 0;
+          const faceoffOpp = gameStats.faceoffOpp || 0;
+          const hitsTeam = gameStats.hitsTeam || 0;
+          const hitsOpp = gameStats.hitsOpp || 0;
+          const blocksTeam = gameStats.blocksTeam || 0;
+          const blocksOpp = gameStats.blocksOpp || 0;
+          
+          // Puntuación de dominio (fórmula simple ponderada)
+          let dominanceScore = 0;
+          if (shotsTeam > shotsOpp) dominanceScore += 2;
+          else if (shotsOpp > shotsTeam) dominanceScore -= 2;
+          
+          if (faceoffTeam > faceoffOpp) dominanceScore += 1;
+          else if (faceoffOpp > faceoffTeam) dominanceScore -= 1;
+          
+          if (hitsTeam > hitsOpp) dominanceScore += 1;
+          else if (hitsOpp > hitsTeam) dominanceScore -= 1;
+          
+          let dominanceText = '';
+          if (dominanceScore >= 3) dominanceText = `<span class="dominance-badge">⚡ ${attr.team_abbr} DOMINANDO</span>`;
+          else if (dominanceScore <= -3) dominanceText = `<span class="dominance-badge">⚡ ${attr.opponent_abbr} DOMINANDO</span>`;
+          else if (dominanceScore > 0) dominanceText = `<span style="color: var(--team-primary); font-weight: 600;">↗ ${attr.team_abbr} ligera ventaja</span>`;
+          else if (dominanceScore < 0) dominanceText = `<span style="color: var(--opponent-primary); font-weight: 600;">↗ ${attr.opponent_abbr} ligera ventaja</span>`;
+          else dominanceText = '<span style="color: rgba(255,255,255,0.5);">⚖️ Partido parejo</span>';
+          
+          shotsHtml = `
+            <div class="shots-header">
+              <div class="shots-bar-container">
+                <div class="top-row">
+                  <div class="stat-label">${useTarget ? 'TIROS A PORTERÍA' : 'TIROS TOTALES'}</div>
+                  <div class="center-info">
+                    ${dominanceText ? `${dominanceText}` : ''}
+                  </div>
+                  <div class="stat-values">
+                    <span class="stat-value" data-tooltip="Equipo: ${shotsTeam} (${pctTeam}%)" style="color: var(--team-primary);">${shotsTeam}</span>
+                    <span class="stat-sep">:</span>
+                    <span class="stat-value" data-tooltip="Rival: ${shotsOpp} (${pctOpp}%)" style="color: var(--opponent-primary);">${shotsOpp}</span>
+                  </div>
+                </div>
+                <div class="shots-bar" id="shotsBar">
+                  <div class="team" style="width:${pctTeam}%"></div>
+                  <div class="opp" style="width:${pctOpp}%"></div>
+                </div>
+              </div>
+            </div>
+          `;
+          
+          // Estadísticas secundarias (tarjetas compactas)
+          const totalFaceoffs = faceoffTeam + faceoffOpp;
+          const pctFaceoffTeam = totalFaceoffs > 0 ? Math.round((faceoffTeam / totalFaceoffs) * 100) : 50;
+          const pctFaceoffOpp = 100 - pctFaceoffTeam;
+          
+          const totalHits = hitsTeam + hitsOpp;
+          const pctHitsTeam = totalHits > 0 ? Math.round((hitsTeam / totalHits) * 100) : 50;
+          const pctHitsOpp = 100 - pctHitsTeam;
+          
+          const totalBlocks = blocksTeam + blocksOpp;
+          const pctBlocksTeam = totalBlocks > 0 ? Math.round((blocksTeam / totalBlocks) * 100) : 50;
+          const pctBlocksOpp = 100 - pctBlocksTeam;
+          
+          const hasSecondaryStats = (totalFaceoffs > 0 || totalHits > 0 || totalBlocks > 0);
+          
+          if (hasSecondaryStats && live) {
+            secondaryStatsHtml = `
+              <div class="secondary-stats">
+                ${totalFaceoffs > 0 ? `
+                <div class="mini-stat">
+                  <div class="mini-stat-label">Faceoffs</div>
+                  <div class="mini-stat-values">
+                    <span style="color: var(--team-primary);">${faceoffTeam}</span>
+                    <span style="color: rgba(255,255,255,0.3);">:</span>
+                    <span style="color: var(--opponent-primary);">${faceoffOpp}</span>
+                  </div>
+                  <div class="mini-stat-bar">
+                    <div style="width:${pctFaceoffTeam}%; background: var(--team-primary);"></div>
+                    <div style="width:${pctFaceoffOpp}%; background: var(--opponent-primary);"></div>
+                  </div>
+                </div>
+                ` : ''}
+                ${totalHits > 0 ? `
+                <div class="mini-stat">
+                  <div class="mini-stat-label">Golpes</div>
+                  <div class="mini-stat-values">
+                    <span style="color: var(--team-primary);">${hitsTeam}</span>
+                    <span style="color: rgba(255,255,255,0.3);">:</span>
+                    <span style="color: var(--opponent-primary);">${hitsOpp}</span>
+                  </div>
+                  <div class="mini-stat-bar">
+                    <div style="width:${pctHitsTeam}%; background: var(--team-primary);"></div>
+                    <div style="width:${pctHitsOpp}%; background: var(--opponent-primary);"></div>
+                  </div>
+                </div>
+                ` : ''}
+                ${totalBlocks > 0 ? `
+                <div class="mini-stat">
+                  <div class="mini-stat-label">Bloqueos</div>
+                  <div class="mini-stat-values">
+                    <span style="color: var(--team-primary);">${blocksTeam}</span>
+                    <span style="color: rgba(255,255,255,0.3);">:</span>
+                    <span style="color: var(--opponent-primary);">${blocksOpp}</span>
+                  </div>
+                  <div class="mini-stat-bar">
+                    <div style="width:${pctBlocksTeam}%; background: var(--team-primary);"></div>
+                    <div style="width:${pctBlocksOpp}%; background: var(--opponent-primary);"></div>
+                  </div>
+                </div>
+                ` : ''}
+              </div>
+            `;
+          }
+      }
+
+      app.innerHTML = `
+        <div class="header">
+          <div class="header-left">
+            <div class="event-info">
+              <h1>${attr.event_url ? `<a href="${attr.event_url}" target="_blank" rel="noopener" style="color:white; text-decoration:none;">${attr.event_name || 'Sin juego programado'}</a>` : (attr.event_name || 'Sin juego programado')}</h1>
+              <p>${attr.venue || 'Por definir'} • ${attr.location || ''}</p>
+            </div>
+          </div>
+          <div class="header-right">
+            <div class="tv-network">${attr.tv_network || ''}</div>
+            <div class="game-date">${formatDate(attr.date)} <button class="refresh-btn" id="refreshNow">Recargar ahora</button></div>
+          </div>
+        </div>
+        
+        ${shotsHtml}
+        ${secondaryStatsHtml}
+
+        <div class="main-score">
+          <div class="team">
+            ${attr.team_url ? `<a href="${attr.team_url}" target="_blank" rel="noopener">` : ''}
+            <img src="${attr.team_logo || ''}" alt="${attr.team_name || ''}" class="team-logo" onerror="this.style.display='none'">
+            ${attr.team_url ? `</a>` : ''}
+            <div class="team-name">${attr.team_long_name || 'Equipo'}</div>
+            <div class="team-abbr">${attr.team_abbr || 'TM'}</div>
+            <div class="team-record">Récord: ${attr.team_record || '0-0-0'}</div>
+            <div class="team-badge">${teamHA}</div>
+          </div>
+          
+          <div class="score-center">
+            <div class="scores">
+              <div id="scoreTeam" class="score ${attr.team_winner ? 'winner' : 'loser'}">${attr.team_score || '0'}</div>
+              <div class="score-separator">-</div>
+              <div id="scoreOpp" class="score ${attr.opponent_winner ? 'winner' : 'loser'}">${attr.opponent_score || '0'}</div>
+            </div>
+            
+            <div class="status-badge">${convertClockTimeZone(attr.clock) || 'Por definir'}</div>
+            ${live ? `<div class="live-inline"><span class="live-dot"></span><span class="live-text">EN VIVO</span></div>` : ''}
+            <div class="state-chips">
+              ${(/ot/i.test(attr.clock || '')) ? `<span class="state-chip">OT</span>` : ''}
+              ${(/so/i.test(attr.clock || '')) ? `<span class="state-chip">SO</span>` : ''}
+              ${(/intermission/i.test(attr.clock || '')) ? `<span class="state-chip">Intermedio</span>` : ''}
+            </div>
+            <div class="period-info">${periodLabel}</div>
+            
+            <div class="game-details-grid">
+              <div class="last-play-section">
+                <div class="last-play-title">Últimas jugadas</div>
+                <div id="playsTimeline" class="plays-timeline"></div>
+              </div>
+            </div>
+            
+            ${attr.team_winner ? 
+              `<div class="winner-badge"><span class="winner-text">${attr.team_abbr} GANA</span></div>` : 
+              (attr.opponent_winner ? 
+                `<div class="winner-badge"><span class="winner-text">${attr.opponent_abbr} GANA</span></div>` : '')}
+          </div>
+          
+          <div class="team">
+            ${attr.opponent_url ? `<a href="${attr.opponent_url}" target="_blank" rel="noopener">` : ''}
+            <img src="${attr.opponent_logo || ''}" alt="${attr.opponent_name || ''}" class="team-logo" onerror="this.style.display='none'">
+            ${attr.opponent_url ? `</a>` : ''}
+            <div class="team-name">${attr.opponent_long_name || 'Rival'}</div>
+            <div class="team-abbr">${attr.opponent_abbr || 'OPP'}</div>
+            <div class="team-record">Récord: ${attr.opponent_record || '0-0-0'}</div>
+            <div class="team-badge">${oppHA}</div>
+          </div>
+        </div>
+        
+        <div class="footer">
+          <div class="footer-content">
+            <div class="footer-info">
+              <span>Comienzo:</span>
+              <strong>${attr.kickoff_in || 'Por definir'}</strong>
+            </div>
+            <div class="last-update">
+              Última actualización: ${formatTime(attr.last_update)}
+            </div>
+          </div>
+        </div>
+      `;
+      
+      const refreshBtn = document.getElementById('refreshNow');
+      if (refreshBtn && !refreshBtn._bound) {
+        refreshBtn.addEventListener('click', manualRefresh);
+        refreshBtn._bound = true;
+      }
+
+      if (!document.getElementById('newPlaysBadge')) {
+        const nb = document.createElement('div');
+        nb.id = 'newPlaysBadge';
+        nb.style.position = 'fixed';
+        nb.style.right = '18px';
+        nb.style.bottom = '110px';
+        nb.style.background = 'rgba(255,255,255,0.08)';
+        nb.style.color = '#fff';
+        nb.style.padding = '0.45rem 0.7rem';
+        nb.style.borderRadius = '999px';
+        nb.style.display = 'none';
+        nb.style.zIndex = 60;
+        nb.style.fontWeight = 700;
+        nb.style.boxShadow = '0 8px 24px rgba(0,0,0,0.45)';
+        nb.innerText = 'NUEVAS';
+        document.body.appendChild(nb);
+      }
+
+      try {
+        const bar = document.getElementById('shotsBar');
+        if (bar) {
+          const teamEl = bar.querySelector('.team');
+          const oppEl = bar.querySelector('.opp');
+          const curTeamW = teamEl ? teamEl.style.width : '';
+          if (!bar._lastWidth) bar._lastWidth = curTeamW;
+          if (bar._lastWidth !== curTeamW) {
+            bar.classList.add('pulse');
+            setTimeout(() => bar.classList.remove('pulse'), 900);
+            bar._lastWidth = curTeamW;
+          }
+        }
+      } catch (e) {
+      }
+
+      try {
+        let touchTip = document.getElementById('touchTooltip');
+        if (!touchTip) {
+          touchTip = document.createElement('div');
+          touchTip.id = 'touchTooltip';
+          touchTip.className = 'touch-tooltip';
+          document.body.appendChild(touchTip);
+        }
+
+        const statValues = document.querySelectorAll('.shots-header .stat-value');
+        statValues.forEach(el => {
+          if (el._touchBound) return;
+          el.addEventListener('click', (ev) => {
+            const text = el.getAttribute('data-tooltip') || el.innerText || '';
+            touchTip.innerText = text;
+            const rect = el.getBoundingClientRect();
+            touchTip.style.left = (rect.left + rect.width/2) + 'px';
+            touchTip.style.top = (rect.top - 48) + 'px';
+            touchTip.style.opacity = '1';
+            setTimeout(() => { touchTip.style.opacity = '0'; }, 2200);
+          });
+          el._touchBound = true;
+        });
+
+        const timeline = document.getElementById('playsTimeline');
+        if (timeline) {
+          timeline.querySelectorAll('.play-card').forEach(card => {
+            if (card._tapBound) return;
+            card.addEventListener('click', () => {
+              const expanded = card.classList.toggle('expanded');
+              if (expanded) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+            card._tapBound = true;
+          });
+        }
+      } catch (e) {
+      }
+
+      if (pendingScoreFlip) {
+        const el = pendingScoreFlip === 'team' ? document.getElementById('scoreTeam') : document.getElementById('scoreOpp');
+        if (el) {
+          el.classList.add('flip');
+          setTimeout(() => el && el.classList && el.classList.remove('flip'), 650);
+        }
+        pendingScoreFlip = null;
+      }
+
+      const appEl2 = document.getElementById('app');
+      const leagueOpacity = live ? 0.06 : (gameState === 'POST' ? 0.03 : 0.05);
+      appEl2 && appEl2.style.setProperty('--league-opacity', String(leagueOpacity));
+
+      let statusMsg = '';
+      if (gameState === 'POST') statusMsg = 'Finalizado';
+      else if (gameState === 'PRE') statusMsg = 'Esperando inicio del juego…';
+      updatePlaysTimeline(false, statusMsg);
+      
+      // IMPORTANTE: Restaurar tarjetas de penalty después del render
+      restorePenaltyCards();
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // INICIALIZACIÓN
+    // ═══════════════════════════════════════════════════════════════
+    
+    addLog('🏒 Sistema NHL API iniciado (Home Assistant Proxy)', 'success');
+    addLog(`Monitoreando: ${INPUT_SELECT}`, 'info');
+    addLog('🌐 Usando: Home Assistant rest_command', 'info');
+    
+    loadProcessedGoals();
+    
+    const debugToggleBtn = document.createElement('button');
+    debugToggleBtn.id = 'debugToggleFloatingBtn';
+    debugToggleBtn.innerHTML = '🏒';
+    debugToggleBtn.title = 'Mostrar/Ocultar Debug Log';
+    debugToggleBtn.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.7);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 9998;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    `;
+    
+    debugToggleBtn.addEventListener('mouseenter', () => {
+      debugToggleBtn.style.transform = 'scale(1.1)';
+      debugToggleBtn.style.background = 'rgba(0, 0, 0, 0.9)';
+    });
+    
+    debugToggleBtn.addEventListener('mouseleave', () => {
+      debugToggleBtn.style.transform = 'scale(1)';
+      debugToggleBtn.style.background = 'rgba(0, 0, 0, 0.7)';
+    });
+    
+    debugToggleBtn.addEventListener('click', () => {
+      const logPanel = document.getElementById('nhlDebugLog');
+      if (logPanel) {
+        if (logPanel.style.display === 'none') {
+          logPanel.style.display = 'block';
+          debugToggleBtn.style.opacity = '1';
+        } else {
+          logPanel.style.display = 'none';
+          debugToggleBtn.style.opacity = '0.6';
+        }
+      }
+    });
+    
+    document.body.appendChild(debugToggleBtn);
+    
+    updatePanel();
+    setRefreshInterval(30000);
+  </script>
+</body>
+</html>
